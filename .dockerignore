@@ -1,0 +1,11 @@
+**/node_modules
+web/dist
+web/public/vendor
+var
+.venv
+data/raw
+data/qa
+data/control
+.claude
+.git
+**/.DS_Store

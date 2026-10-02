@@ -1,0 +1,30 @@
+{
+ "A": {
+  "title": "Whole municipality (overview)",
+  "west": 80.319,
+  "east": 80.405,
+  "south": 16.8915,
+  "north": 16.9485
+ },
+ "B": {
+  "title": "Core town, Zone 1",
+  "west": 80.3535,
+  "east": 80.3785,
+  "south": 16.9105,
+  "north": 16.9445
+ },
+ "C": {
+  "title": "Zone 4 and Zone 3 (south-east)",
+  "west": 80.3655,
+  "east": 80.3895,
+  "south": 16.8995,
+  "north": 16.9265
+ },
+ "D": {
+  "title": "Zone 2, Madupalli (west)",
+  "west": 80.328,
+  "east": 80.3425,
+  "south": 16.9148,
+  "north": 16.9272
+ }
+}

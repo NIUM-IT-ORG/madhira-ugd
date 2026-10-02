@@ -1,0 +1,30 @@
+{
+  "name": "madhira-ugd-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "private": "true",
+  "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@fastify/compress": "^9.2.0",
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/multipart": "^10.1.2",
+    "@fastify/static": "^10.1.5",
+    "bcryptjs": "^3.0.3",
+    "exceljs": "^4.4.0",
+    "fastify": "^5.12.5",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.23.1",
+    "zod": "^4.6.5"
+  },
+  "overrides": {
+    "uuid": "^11.1.1"
+  }
+}

@@ -1,0 +1,371 @@
+{
+ "as_of": "2026-09-30",
+ "source": "UGD progress 30-09-26.xlsx",
+ "units": {
+  "pipe_m": "running metres"
+ },
+ "groups": [
+  {
+   "group": "W1",
+   "zone": 1,
+   "wards": [
+    1
+   ],
+   "locality": "Didugupadu/Jilugumadu",
+   "sanctioned": {
+    "pipe_m": 6125,
+    "manholes": 265,
+    "ics": 165
+   },
+   "executed": {
+    "pipe_m": 5335,
+    "manholes": 126,
+    "ics": 154
+   }
+  },
+  {
+   "group": "W2",
+   "zone": 1,
+   "wards": [
+    2
+   ],
+   "locality": "Employees Colony, Hanuman Colony, Muslim Colony",
+   "sanctioned": {
+    "pipe_m": 5873,
+    "manholes": 251,
+    "ics": 165
+   },
+   "executed": {
+    "pipe_m": 5636,
+    "manholes": 235,
+    "ics": 164
+   }
+  },
+  {
+   "group": "W8",
+   "zone": 1,
+   "wards": [
+    8
+   ],
+   "locality": "Banjara Colony, Sai Nagar(Didugupadu/Jilugumadu)",
+   "sanctioned": {
+    "pipe_m": 4220,
+    "manholes": 210,
+    "ics": 108
+   },
+   "executed": {
+    "pipe_m": 3941,
+    "manholes": 192,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W9",
+   "zone": 1,
+   "wards": [
+    9
+   ],
+   "locality": "Teachers colony, Sundaraiah Nagar",
+   "sanctioned": {
+    "pipe_m": 5925,
+    "manholes": 255,
+    "ics": 140
+   },
+   "executed": {
+    "pipe_m": 5784,
+    "manholes": 174,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W10",
+   "zone": 1,
+   "wards": [
+    10
+   ],
+   "locality": "Sundaraiah Nagar, Srinagar Colony",
+   "sanctioned": {
+    "pipe_m": 2345,
+    "manholes": 105,
+    "ics": 64
+   },
+   "executed": {
+    "pipe_m": 2209,
+    "manholes": 92,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W11",
+   "zone": 1,
+   "wards": [
+    11
+   ],
+   "locality": "SC Colony",
+   "sanctioned": {
+    "pipe_m": 5095,
+    "manholes": 226,
+    "ics": 111
+   },
+   "executed": {
+    "pipe_m": 1561,
+    "manholes": 70,
+    "ics": 14
+   }
+  },
+  {
+   "group": "W12",
+   "zone": 1,
+   "wards": [
+    12
+   ],
+   "locality": "SC Colony, Vaddera Bazar",
+   "sanctioned": {
+    "pipe_m": 5125,
+    "manholes": 213,
+    "ics": 119
+   },
+   "executed": {
+    "pipe_m": 1727,
+    "manholes": 42,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W13",
+   "zone": 1,
+   "wards": [
+    13
+   ],
+   "locality": "Muslim Bazar, Rayapatnam Road, Shadikhana Road, Yadav Bazar",
+   "sanctioned": {
+    "pipe_m": 5135,
+    "manholes": 224,
+    "ics": 119
+   },
+   "executed": {
+    "pipe_m": 3873,
+    "manholes": 170,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W14",
+   "zone": 1,
+   "wards": [
+    14
+   ],
+   "locality": "Rayapatnam Road Area, Azad Road,Brahmin Bazar",
+   "sanctioned": {
+    "pipe_m": 3825,
+    "manholes": 171,
+    "ics": 87
+   },
+   "executed": {
+    "pipe_m": 1140,
+    "manholes": 34,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W15",
+   "zone": 1,
+   "wards": [
+    15
+   ],
+   "locality": "Varthakasangham Area, Main Road, Old current office road",
+   "sanctioned": {
+    "pipe_m": 4210,
+    "manholes": 173,
+    "ics": 101
+   },
+   "executed": {
+    "pipe_m": 685,
+    "manholes": 0,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W16",
+   "zone": 1,
+   "wards": [
+    16
+   ],
+   "locality": "Sujala Water Plant Area, Dr.Ramanatham Hospital Area, Main Road",
+   "sanctioned": {
+    "pipe_m": 4123,
+    "manholes": 178,
+    "ics": 102
+   },
+   "executed": {
+    "pipe_m": 3282,
+    "manholes": 138,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W17",
+   "zone": 1,
+   "wards": [
+    17
+   ],
+   "locality": "Sai Baba Temple Area, PullakandamvariVeedi",
+   "sanctioned": {
+    "pipe_m": 5035,
+    "manholes": 225,
+    "ics": 99
+   },
+   "executed": {
+    "pipe_m": 3876.5,
+    "manholes": 95,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W18",
+   "zone": 1,
+   "wards": [
+    18
+   ],
+   "locality": "Ladak Bazar",
+   "sanctioned": {
+    "pipe_m": 4135,
+    "manholes": 178,
+    "ics": 107
+   },
+   "executed": {
+    "pipe_m": 1139,
+    "manholes": 38,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W19",
+   "zone": 1,
+   "wards": [
+    19
+   ],
+   "locality": "Banjara Colony",
+   "sanctioned": {
+    "pipe_m": 3950,
+    "manholes": 181,
+    "ics": 96
+   },
+   "executed": {
+    "pipe_m": 1651,
+    "manholes": 68,
+    "ics": 12
+   }
+  },
+  {
+   "group": "W20",
+   "zone": 1,
+   "wards": [
+    20
+   ],
+   "locality": "Wyra Road, Banjara Colony, Siddareddy Bazar",
+   "sanctioned": {
+    "pipe_m": 3565,
+    "manholes": 158,
+    "ics": 88
+   },
+   "executed": {
+    "pipe_m": 765,
+    "manholes": 24,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W21",
+   "zone": 1,
+   "wards": [
+    21
+   ],
+   "locality": "RV Complex Area, RCM Church Area",
+   "sanctioned": {
+    "pipe_m": 3735,
+    "manholes": 165,
+    "ics": 89
+   },
+   "executed": {
+    "pipe_m": 2375,
+    "manholes": 119,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W22",
+   "zone": 1,
+   "wards": [
+    22
+   ],
+   "locality": "Station Road, Bapuji Road, Market Yard Area",
+   "sanctioned": {
+    "pipe_m": 3155,
+    "manholes": 133,
+    "ics": 79
+   },
+   "executed": {
+    "pipe_m": 0,
+    "manholes": 0,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W5-6-7",
+   "zone": 2,
+   "wards": [
+    5,
+    6,
+    7
+   ],
+   "locality": "Madupalli",
+   "sanctioned": {
+    "pipe_m": 13241,
+    "manholes": 620,
+    "ics": 433
+   },
+   "executed": {
+    "pipe_m": 9762,
+    "manholes": 359,
+    "ics": 147
+   }
+  },
+  {
+   "group": "W3",
+   "zone": 3,
+   "wards": [
+    3
+   ],
+   "locality": "Ambarupeta",
+   "sanctioned": {
+    "pipe_m": 4396,
+    "manholes": 199,
+    "ics": 170
+   },
+   "executed": {
+    "pipe_m": 0,
+    "manholes": 0,
+    "ics": 0
+   }
+  },
+  {
+   "group": "W4",
+   "zone": 4,
+   "wards": [
+    4
+   ],
+   "locality": "Yellandulapadu",
+   "sanctioned": {
+    "pipe_m": 6347,
+    "manholes": 257,
+    "ics": 213
+   },
+   "executed": {
+    "pipe_m": 0,
+    "manholes": 0,
+    "ics": 0
+   }
+  }
+ ]
+}

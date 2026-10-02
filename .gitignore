@@ -1,0 +1,10 @@
+node_modules
+var/
+.venv/
+web/dist
+web/public/vendor
+data/qa/
+.DS_Store
+backups/
+release/
+.claude/

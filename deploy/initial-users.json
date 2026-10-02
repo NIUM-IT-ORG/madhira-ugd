@@ -1,0 +1,32 @@
+{
+ "note": "Accounts created on the very first start (empty database). Passwords are stored only as bcrypt hashes; the one-time passwords are given to the users in their guides and must be changed at first sign-in.",
+ "users": [
+  {
+   "email": "commissioner@madhira.local",
+   "name": "Commissioner",
+   "designation": "Municipal Commissioner",
+   "role": "admin",
+   "all_wards": true,
+   "wards": [],
+   "password_hash": "$2b$10$ILPynZ23c/434d/InnPCT.cSIZQczF4km7MDjP20eTF9wE6rU3mxy"
+  },
+  {
+   "email": "aee@madhira.local",
+   "name": "AEE",
+   "designation": "Assistant Executive Engineer",
+   "role": "editor",
+   "all_wards": true,
+   "wards": [],
+   "password_hash": "$2b$10$6f4orm0j.BkfZmn9hXKTbO32sHEZt/uFA1nJmFB1sxJjvVpjAcgh."
+  },
+  {
+   "email": "inspector@madhira.local",
+   "name": "Field Inspector",
+   "designation": "Field Inspector",
+   "role": "editor",
+   "all_wards": true,
+   "wards": [],
+   "password_hash": "$2b$10$PL0VLQmWLjq5qbSUfDZOLeTlP85UU28TmIL/JAB00KVdJFKRyIDEi"
+  }
+ ]
+}

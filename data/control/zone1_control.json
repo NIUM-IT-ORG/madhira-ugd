@@ -1,0 +1,7 @@
+{
+ "note": "Zone-1 network control points. scale = 1/1.0151 from pipe-length labels (used when only one point).",
+ "scale": 0.98512,
+ "points": [
+  {"sheet": "Z1P3", "xy": [897.7, 953.8], "utm": [431820, 1870142.5], "note": "PS-1 wet well = STP-1 survey grid centre (key plan UTM labels)"}
+ ]
+}

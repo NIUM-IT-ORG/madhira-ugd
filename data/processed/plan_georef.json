@@ -1,0 +1,19 @@
+{
+ "utm_epsg": 32644,
+ "frame": "Zone-2 sheet page coordinates (PDF pt)",
+ "x_from_E": [
+  1.7111271784827224,
+  -732861.6064659953
+ ],
+ "y_from_N": [
+  -1.7111308724458618,
+  3202503.377824868
+ ],
+ "fit_rms_pt": 5.6779501410352325e-05,
+ "pt_per_m": 1.7111290254642921,
+ "check_stp2_vs_zonal_plan_m": 4.9,
+ "control_labels": {
+  "N": 15,
+  "E": 12
+ }
+}

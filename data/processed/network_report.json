@@ -1,0 +1,268 @@
+{
+ "Z2": {
+  "georef": "own STP survey grid (UTM labels)",
+  "alignment": null,
+  "symbols": 639,
+  "mh_labels": 639,
+  "labels_assigned": 639,
+  "labels_far_from_symbol": 8,
+  "length_labels": 635,
+  "reaches_from_labels": 607,
+  "reaches_from_bands": 638,
+  "label_vs_band_agree": 603,
+  "band_only": 35,
+  "geom_over_label_len_median": 1.0004
+ },
+ "Z3": {
+  "georef": "own STP survey grid (UTM labels)",
+  "alignment": null,
+  "symbols": 248,
+  "mh_labels": 242,
+  "labels_assigned": 242,
+  "labels_far_from_symbol": 1,
+  "length_labels": 243,
+  "reaches_from_labels": 237,
+  "reaches_from_bands": 242,
+  "label_vs_band_agree": 226,
+  "band_only": 16,
+  "geom_over_label_len_median": 1.0002
+ },
+ "Z4": {
+  "georef": "own STP survey grid (UTM labels)",
+  "alignment": null,
+  "symbols": 396,
+  "mh_labels": 396,
+  "labels_assigned": 396,
+  "labels_far_from_symbol": 2,
+  "length_labels": 393,
+  "reaches_from_labels": 381,
+  "reaches_from_bands": 395,
+  "label_vs_band_agree": 369,
+  "band_only": 26,
+  "geom_over_label_len_median": 1.0024
+ },
+ "Z1P1": {
+  "georef": "shared base map, Zone-2 STP grid",
+  "alignment": null,
+  "symbols": 862,
+  "mh_labels": 851,
+  "labels_assigned": 850,
+  "labels_far_from_symbol": 33,
+  "length_labels": 849,
+  "reaches_from_labels": 834,
+  "reaches_from_bands": 0,
+  "label_vs_band_agree": null,
+  "band_only": null,
+  "geom_over_label_len_median": 1.0149
+ },
+ "Z1P2": {
+  "georef": "aligned on manholes shared with earlier Zone-1 parts",
+  "alignment": {
+   "shared": 72,
+   "inliers": 44,
+   "scale": 1.0004,
+   "rot_deg": 0.003,
+   "rms_m": 0.21
+  },
+  "symbols": 553,
+  "mh_labels": 548,
+  "labels_assigned": 548,
+  "labels_far_from_symbol": 23,
+  "length_labels": 548,
+  "reaches_from_labels": 537,
+  "reaches_from_bands": 0,
+  "label_vs_band_agree": null,
+  "band_only": null,
+  "geom_over_label_len_median": 1.0154
+ },
+ "Z1P3": {
+  "georef": "aligned on manholes shared with earlier Zone-1 parts",
+  "alignment": {
+   "shared": 243,
+   "inliers": 192,
+   "scale": 0.8336,
+   "rot_deg": 0.017,
+   "rms_m": 0.28
+  },
+  "symbols": 1507,
+  "mh_labels": 1499,
+  "labels_assigned": 1499,
+  "labels_far_from_symbol": 21,
+  "length_labels": 1507,
+  "reaches_from_labels": 1488,
+  "reaches_from_bands": 0,
+  "label_vs_band_agree": null,
+  "band_only": null,
+  "geom_over_label_len_median": 1.0151
+ },
+ "zone1_correction": {
+  "points": 1,
+  "scale": 0.98512,
+  "rot_deg": 0.0,
+  "shift_m": [
+   2602.8,
+   3019.3
+  ],
+  "residuals_m": [
+   0.0
+  ]
+ },
+ "zones": {
+  "1": {
+   "manholes": 2686,
+   "labelled_manholes": 2661,
+   "reaches": 2689,
+   "length_km": 88.69,
+   "dia": {
+    "150": 2369,
+    "200": 107,
+    "300": 76,
+    "350": 40,
+    "250": 49,
+    "null": 3,
+    "700": 11,
+    "600": 32,
+    "400": 2
+   }
+  },
+  "2": {
+   "manholes": 639,
+   "labelled_manholes": 639,
+   "reaches": 642,
+   "length_km": 14.96,
+   "dia": {
+    "150": 584,
+    "null": 1,
+    "200": 31,
+    "250": 12,
+    "300": 14
+   }
+  },
+  "3": {
+   "manholes": 248,
+   "labelled_manholes": 242,
+   "reaches": 253,
+   "length_km": 6.14,
+   "dia": {
+    "150": 238,
+    "250": 9,
+    "200": 5,
+    "null": 1
+   }
+  },
+  "4": {
+   "manholes": 396,
+   "labelled_manholes": 396,
+   "reaches": 407,
+   "length_km": 10.01,
+   "dia": {
+    "150": 379,
+    "200": 28
+   }
+  }
+ },
+ "sheet_to_utm": {
+  "Z2": [
+   [
+    0.5844100967917021,
+    0.0,
+    428291.72236971464
+   ],
+   [
+    0.0,
+    -0.5844088351761293,
+    1871571.2686822508
+   ],
+   [
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "Z3": [
+   [
+    0.40892094958822084,
+    0.0,
+    433788.5867801894
+   ],
+   [
+    0.0,
+    -0.4089204278400549,
+    1871481.7977209238
+   ],
+   [
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "Z4": [
+   [
+    0.9301834731854463,
+    0.0,
+    431730.0129544684
+   ],
+   [
+    0.0,
+    -0.9301832939174142,
+    1870464.4518095641
+   ],
+   [
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "Z1P1": [
+   [
+    1.7156279134983274,
+    0.000504731427239677,
+    427485.6166357348
+   ],
+   [
+    0.0005047303376331201,
+    -1.7156242098270449,
+    1871031.6878224318
+   ],
+   [
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "Z1P2": [
+   [
+    2.246351871155572,
+    0.0005858147973639994,
+    428698.45932831435
+   ],
+   [
+    0.0005858139696677506,
+    -2.246347021765438,
+    1871378.8075461413
+   ],
+   [
+    0.0,
+    0.0,
+    1.0
+   ]
+  ],
+  "Z1P3": [
+   [
+    3.3003590209633544,
+    0.0012138143007950554,
+    426253.3003179131
+   ],
+   [
+    0.0012138158546574694,
+    -3.3003518961984994,
+    1870270.027746507
+   ],
+   [
+    0.0,
+    0.0,
+    1.0
+   ]
+  ]
+ }
+}

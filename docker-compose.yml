@@ -1,0 +1,60 @@
+# One-command deployment on any Linux server with Docker:
+#   cp .env.example .env   (fill it in)
+#   docker compose up -d
+# Caddy obtains a free HTTPS certificate for DOMAIN automatically (point the domain's DNS at this server first).
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }   # keeps logs from filling the disk
+
+services:
+  db:
+    image: postgres:17-alpine
+    logging: *logging
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ugd
+      POSTGRES_USER: ugd
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ugd -d ugd"]
+      interval: 10s
+      retries: 10
+
+  app:
+    build: .
+    logging: *logging
+    image: madhira-ugd:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://ugd:${DB_PASSWORD}@db:5432/ugd
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      COOKIE_SECURE: "true"
+      TIME_ZONE: Asia/Kolkata
+    volumes:
+      - uploads:/var/lib/ugd   # site photos
+    expose:
+      - "8080"
+
+  caddy:
+    image: caddy:2-alpine
+    logging: *logging
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+
+volumes:
+  db:
+  uploads:
+  caddy:

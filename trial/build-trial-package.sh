@@ -11,7 +11,7 @@ cd "$WORK"
 (cd server && npm ci --omit=dev --no-audit --no-fund)
 OUT="$WORK/$NAME"
 mkdir -p "$OUT/server" "$OUT/web" "$OUT/data" "$OUT/trial"
-cp -R server/src server/test server/package.json server/package-lock.json server/node_modules "$OUT/server/"
+cp -R server/src server/test server/scripts server/package.json server/package-lock.json server/node_modules "$OUT/server/"
 cp -R shared "$OUT/"
 cp -R web/dist "$OUT/web/"
 cp -R data/processed "$OUT/data/"

@@ -23,6 +23,7 @@ module.exports = function userGuides(root, creds) {
     aee: { email: 'aee@madhira.local', name: 'AEE' },
     insp: { email: 'inspector@madhira.local', name: 'Field Inspector' },
   };
+  const ASSISTANTS = [1, 2, 3].map((i) => ({ email: `assistant${i}@madhira.local`, name: `Contracting Assistant ${i}` }));
   const colours = {
     t: 'table',
     head: ['Line colour on the map', 'Meaning'],
@@ -44,7 +45,7 @@ module.exports = function userGuides(root, creds) {
   const commissioner = {
     ...meta,
     title: "Commissioner's Guide",
-    subtitle: 'Version 1.1 · October 2026 · for the Municipal Commissioner (administrator)',
+    subtitle: 'Version 1.2 · October 2026 · for the Municipal Commissioner (administrator)',
     header: "Madhira UGD Tracker · Commissioner's Guide",
     blocks: [
       { t: 'p', text: 'The UGD Tracker shows every road of the Underground Drainage scheme on a satellite map of Madhira. Your AEE and Field Inspector record what they see on each road from their phones; you see it live, approve restorations and network changes, and download reports.' },
@@ -52,10 +53,11 @@ module.exports = function userGuides(root, creds) {
       credTable(ACC.comm),
       { t: 'note', tone: 'warn', label: 'Keep this private.', text: 'The one-time password works only until you sign in for the first time; you must then choose your own password (at least 8 characters). After that the password above no longer works.' },
       { t: 'h2', text: 'Accounts for your field staff' },
-      { t: 'p', text: 'Two more accounts are ready. Give each person their own sign-in in person or by phone; they are also printed in the AEE and Field Inspector Guide. Both can record and propose in all 22 wards.' },
-      { t: 'table', head: ['Person', 'Email (sign-in name)', 'One-time password'], widths: [0.25, 0.4, 0.35], rows: [
-        ['AEE', ACC.aee.email, `\`${creds[ACC.aee.email]}\``],
+      { t: 'p', text: 'Five more accounts are ready. Give each person their own sign-in in person or by phone; they are also printed in the field staff guide. All can record and propose in all 22 wards. The AEE is a **supervisor**: they can also correct the labour entries of the others within 48 hours.' },
+      { t: 'table', head: ['Person', 'Email (sign-in name)', 'One-time password'], widths: [0.3, 0.4, 0.3], rows: [
+        ['AEE (supervisor)', ACC.aee.email, `\`${creds[ACC.aee.email]}\``],
         ['Field Inspector', ACC.insp.email, `\`${creds[ACC.insp.email]}\``],
+        ...ASSISTANTS.map((a) => [a.name, a.email, `\`${creds[a.email]}\``]),
       ] },
       { t: 'p', text: 'You can change these email addresses to real ones later under **Users → Edit**. Nothing is ever emailed; the address is only the sign-in name.' },
       { t: 'h2', text: 'First sign-in' },
@@ -112,7 +114,8 @@ module.exports = function userGuides(root, creds) {
         '**Zones and wards** (bottom of the page): select a zone to see its wards; **Report** opens a one-page ward report you can print or save as PDF.',
         '**Download Excel**: the progress sheet in its usual layout with field-verified columns added, plus sheets of all stretches, issues, labour and change requests.',
         '**Open in Google Earth (KML)**: every stretch coloured by stage, and open issues as pins.',
-        '**Issues** page: filter by kind, zone, **ward**, severity and status; **Download Excel** saves exactly the list you are looking at (e.g. open issues of ward 5).',
+        '**Issues** page: filter by kind, zone, **ward**, severity and status; in **Table** view tap a column heading to sort. **Download Excel** saves exactly the list you are looking at, in that order (e.g. open issues of ward 5).',
+        '**Labour** page: labour and machines per zone per day, with totals, filters, history of corrections and Excel. You can correct or delete any entry at any time; field staff can for 48 hours after saving.',
       ] },
       { t: 'image', path: img('ward-report'), width: 5.2, caption: 'Ward report, ready to print' },
 
@@ -126,6 +129,10 @@ module.exports = function userGuides(root, creds) {
         '**Users → + Add user**: name, designation, email, access and wards. The app shows a one-time password once: give it to the person directly.',
         '**Reset password** issues a new one-time password; **Disable** blocks the account at once (its history is kept).',
       ] },
+      { t: 'p', text: 'Tick **Supervisor (AEE)** on a person\'s Users entry to let them correct other field staff\'s labour entries within 48 hours (the AEE has it already). Contracting assistants are ordinary editors, like the Field Inspector.' },
+      { t: 'h2', text: 'Deleting issues' },
+      { t: 'p', text: 'Mark resolved keeps an issue on record. To remove a wrong or duplicate issue completely, open it and select **Delete**, or tick several in the Issues **Table** view and select **Delete selected…**. Give the reason; the issue disappears from the map, lists, dashboard and Excel, with its photos. If it was raised from a road (e.g. "2 taps broken" ticked on the road), that damage is cleared on the road too and noted in the road\'s history. The reason is kept in the admin log.' },
+      { t: 'image', path: img('issues-delete'), caption: 'Deleting two issues from the Table view (sample data)' },
       { t: 'h2', text: 'Correcting a record' },
       { t: 'bullets', items: [
         'Open the stretch → **History** → **Roll back to this version**. The rollback is itself recorded; nothing is lost.',
@@ -150,16 +157,19 @@ module.exports = function userGuides(root, creds) {
 
   const field = {
     ...meta,
-    title: 'AEE and Field Inspector Guide',
-    subtitle: 'Version 1.1 · October 2026 · for recording work on site with your phone',
-    header: 'Madhira UGD Tracker · AEE and Field Inspector Guide',
+    title: 'AEE, Field Inspector and Contracting Assistants Guide',
+    subtitle: 'Version 1.2 · October 2026 · for recording work on site with your phone',
+    header: 'Madhira UGD Tracker · Field staff guide',
     blocks: [
-      { t: 'p', text: 'You record what you see on each road. Every save keeps your name, the time, your phone\'s GPS position and your photos, and the Commissioner sees it at once. Both of you can work in all 22 wards.' },
+      { t: 'p', text: 'You record what you see on each road. Every save keeps your name, the time, your phone\'s GPS position and your photos, and the Commissioner sees it at once. All of you can work in all 22 wards; contracting assistants record exactly like the Field Inspector.' },
       { t: 'h1', text: '1. Your sign-in' },
       { t: 'h3', text: 'AEE' },
       credTable(ACC.aee),
       { t: 'h3', text: 'Field Inspector' },
       credTable(ACC.insp),
+      { t: 'h3', text: 'Contracting assistants' },
+      { t: 'table', head: ['Person', 'Email (sign-in name)', 'One-time password'], widths: [0.3, 0.4, 0.3], rows: ASSISTANTS.map((a) => [a.name, a.email, `\`${creds[a.email]}\``]) },
+      { t: 'p', text: 'Web address: given by your IT team.' },
       { t: 'note', tone: 'warn', label: 'Keep yours private.', text: 'The one-time password works only for your first sign-in; you must then choose your own password (at least 8 characters). Do not share accounts: every entry carries the name of the person signed in.' },
       { t: 'h2', text: 'Set up your phone (5 minutes)' },
       { t: 'steps', items: [
@@ -209,7 +219,7 @@ module.exports = function userGuides(root, creds) {
       { t: 'h1', text: '4. Issues' },
       { t: 'bullets', items: [
         'Damage you record on a stretch opens an **issue** automatically. Recording it fixed (taps restored, leakages fixed, drain cleared…) closes the issue.',
-        'For a problem at a spot (e.g. gravel dumped in a drain), tap **Report issue**, tap the spot, choose the problem, write the **remark** (required) and add a photo if you can.',
+        'For a problem at a spot (e.g. gravel dumped in a drain), tap **Report issue**, tap the spot, choose the problem (including **Drain damaged** and **Culvert broken / damaged**), write the **remark** (required) and add a photo if you can.',
         'On the **Issues** page: filter by zone, **ward**, kind, severity or status; **Assign** an issue to the contractor with a due date; when fixed, **Mark resolved** with a note (and a photo of the fix if you can).',
       ] },
 
@@ -224,7 +234,7 @@ module.exports = function userGuides(root, creds) {
       { t: 'h1', text: '6. No signal, labour, and good practice' },
       { t: 'bullets', items: [
         '**No signal:** the app opens with the last data you saw; save as usual. The update and its photos wait on your phone ("1 waiting to send" at the top; tap it to see them) and are sent once, when the signal returns, under your name. Do not clear the browser\'s data meanwhile. "Not accepted": tap it to read why, then **Try again** or **Discard**.',
-        '**Labour:** tap your initial (top right) → **Log labour**: date, ward, number of labourers and machines. One entry per ward per day; saving again replaces it.',
+        '**Labour:** tap your initial (top right) → **Log labour**: date, **zone**, number of labourers and machines (one entry per zone per day). The **Labour** page lists the entries; **Edit** corrects your own for 48 hours after saving (the AEE can also correct the others\'). After that they are frozen; ask the Commissioner.',
         'Record **on site**: your GPS position is saved with every update.',
         'Keep a stretch to **one road between two junctions**, so its colour tells one story.',
         'Take photos in daylight showing the road surface and a landmark (house, pole, shop).',

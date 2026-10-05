@@ -237,10 +237,19 @@ export interface ActivityItem {
 export interface LabourLog {
   id: number
   log_date: string
-  ward: number
   zone: number
   labourers: number
   machines: number
   note: string | null
+  user_id: string | null
   user_name: string | null
+  user_designation: string | null
+  created_at: string
+  updated_at: string | null
+  updated_by_name: string | null
+  legacy_wards: number[] | null
+  editable: boolean
+  editable_until: string
+  locked_reason: string | null
 }
+export interface LabourEvent { at: string; action: string; changes: { path: string; from?: unknown; to: unknown }[]; user_name: string | null }

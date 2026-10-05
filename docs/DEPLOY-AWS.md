@@ -1,6 +1,6 @@
 # Deployment Guide: Git and AWS
 
-_Release v1.1 · 3 October 2026 · one AWS EC2 server with Docker (vendor-neutral package)_
+_Release v1.2 · 6 October 2026 · one AWS EC2 server with Docker (vendor-neutral package)_
 
 This guide takes the release package to a working, secure website on AWS in about an hour, and sets up the Git repository the municipality will keep the code in. Everything in the package uses open formats (Docker/OCI container, Docker Compose, PostgreSQL, GeoJSON, PMTiles), so the same package also runs on any other cloud or an on-premise server (see `docs/DEPLOY-GENERIC.md`).
 
@@ -9,12 +9,12 @@ This guide takes the release package to a working, secure website on AWS in abou
 | Website | `https://<your domain>` with an automatic, free, auto-renewing TLS certificate |
 | Server | 1 × EC2 (Ubuntu 24.04) in Mumbai, ap-south-1, running 3 containers: PostgreSQL, the app, Caddy (HTTPS) |
 | Data kept in India | Database and photos on the server's encrypted disk, nightly backups, daily disk snapshots |
-| Code | Private Git repository (GitHub, GitLab, Bitbucket or your own), tag `v1.1`, created from the package in Part A |
-| Accounts | Commissioner, AEE and Field Inspector, created on first start with one-time passwords (in the user guides) |
+| Code | Private Git repository (GitHub, GitLab, Bitbucket or your own), tag `v1.2`, created from the package in Part A |
+| Accounts | Commissioner, AEE, Field Inspector and three contracting assistants, created with one-time passwords (in the user guides); an upgrade adds only accounts that are new |
 
 ## Part 0. What you received
 
-`madhira-ugd-v1.1.zip` (≈130 MB) and `SHA256SUMS.txt`. Unzipped, the folder `madhira-ugd/` holds every file of release v1.1; Part A turns it into the municipality's Git repository.
+`madhira-ugd-v1.2.zip` (≈130 MB) and `SHA256SUMS.txt`. Unzipped, the folder `madhira-ugd/` holds every file of release v1.2; Part A turns it into the municipality's Git repository.
 
 | Folder / file | Contents |
 | --- | --- |
@@ -33,10 +33,10 @@ This guide takes the release package to a working, secure website on AWS in abou
 ```bash
 sha256sum -c SHA256SUMS.txt        # Linux
 shasum -a 256 -c SHA256SUMS.txt    # macOS
-# expected: madhira-ugd-v1.1.zip: OK
+# expected: madhira-ugd-v1.2.zip: OK
 ```
 
-> **Contains one-time passwords.** The user guides in `docs/` contain the starting passwords for the three accounts. They stop working once each person signs in and sets their own password, but treat the package as confidential until then.
+> **Contains one-time passwords.** The user guides in `docs/` contain the starting passwords for the six accounts. They stop working once each person signs in and sets their own password, but treat the package as confidential until then.
 
 ## Part A. Git repository
 
@@ -46,12 +46,12 @@ The municipality should own the code in its own private repository. The largest 
 2. On an office machine with Git installed, unzip the package, record it as the first commit, tag it and push it:
 
    ```bash
-   unzip madhira-ugd-v1.1.zip
+   unzip madhira-ugd-v1.2.zip
    cd madhira-ugd
    git init -b main
    git add -A
-   git commit -m "Madhira UGD Tracker v1.1"
-   git tag -a v1.1 -m "Release v1.1"
+   git commit -m "Madhira UGD Tracker v1.2"
+   git tag -a v1.2 -m "Release v1.2"
    git remote add origin <your repository URL>
    git push -u origin main --tags
    ```
@@ -166,10 +166,10 @@ printf "Host <git-host>\n  IdentityFile ~/.ssh/madhira_deploy\n" >> ~/.ssh/confi
 ```bash
 sudo mkdir -p /opt/madhira-ugd && sudo chown ubuntu:ubuntu /opt/madhira-ugd
 git clone git@<git-host>:<org>/madhira-ugd.git /opt/madhira-ugd
-cd /opt/madhira-ugd && git checkout v1.1
+cd /opt/madhira-ugd && git checkout v1.2
 ```
 
-No Git host yet? Copy the zip instead: `scp -i madhira-ugd.pem madhira-ugd-v1.1.zip ubuntu@<elastic-ip>:/opt/` then `cd /opt && unzip madhira-ugd-v1.1.zip`. The folder must end up at `/opt/madhira-ugd` (the backup script and runbook assume this name).
+No Git host yet? Copy the zip instead: `scp -i madhira-ugd.pem madhira-ugd-v1.2.zip ubuntu@<elastic-ip>:/opt/` then `cd /opt && unzip madhira-ugd-v1.2.zip`. The folder must end up at `/opt/madhira-ugd` (the backup script and runbook assume this name).
 
 ### B9. Settings and first start
 
@@ -242,10 +242,10 @@ A new release arrives as a new zip. **If you already set up the repository from 
 
 ```bash
 cd madhira-ugd                                  # the repository from Part A
-unzip ../madhira-ugd-v1.1.zip -d /tmp/ugd-new
+unzip ../madhira-ugd-v1.2.zip -d /tmp/ugd-new
 rsync -a --delete --exclude .git /tmp/ugd-new/madhira-ugd/ ./
-git add -A && git commit -m "Madhira UGD Tracker v1.1"
-git tag -a v1.1 -m "Release v1.1" && git push origin main --tags
+git add -A && git commit -m "Madhira UGD Tracker v1.2"
+git tag -a v1.2 -m "Release v1.2" && git push origin main --tags
 ```
 
 On the server:
@@ -253,7 +253,7 @@ On the server:
 ```bash
 cd /opt/madhira-ugd
 sh deploy/backup.sh                       # backup first
-git fetch --tags && git checkout v1.1     # the new release tag
+git fetch --tags && git checkout v1.2     # the new release tag
 docker compose up -d --build              # database changes apply automatically
 docker compose exec app node server/test/postdeploy-check.mjs https://<DOMAIN>
 # rollback:  git checkout v1.0 && docker compose up -d --build
@@ -287,7 +287,7 @@ Prices change; confirm with the AWS Pricing Calculator. A 1-year Savings Plan or
 ## Part C. After go-live
 
 1. Send the web address to the Commissioner, with the **Commissioner's Guide** (`docs/user-guides/`).
-2. The Commissioner signs in first, sets a password, and gives the AEE and Field Inspector their sign-ins with the **AEE and Field Inspector Guide**.
+2. The Commissioner signs in first, sets a password, and gives the AEE, Field Inspector and contracting assistants their sign-ins with the field staff guide (`AEE-and-Field-Inspector-Guide.docx`).
 3. Each of them signs in on their phone, sets a password and adds the app to the home screen.
 4. The Commissioner creates the **Viewer** account for IT (B10); run the full post-deploy check.
 5. Work through `docs/UAT-CHECKLIST.md` together; sign off.
@@ -299,7 +299,7 @@ Prices change; confirm with the AWS Pricing Calculator. A 1-year Savings Plan or
 | AWS account / region | ap-south-1 |
 | Instance ID / Elastic IP |  |
 | Git repository URL |  |
-| Deployed tag and date | v1.1 ·  |
+| Deployed tag and date | v1.2 ·  |
 | Backup location(s) | /opt/madhira-ugd/backups · EBS snapshots |
 | IT contact |  |
 

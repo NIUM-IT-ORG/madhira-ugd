@@ -1,7 +1,8 @@
 {
- "note": "LOCAL TRIAL ONLY. Known passwords: trial-commissioner, trial-aee, trial-inspector. Never use this file on a real deployment.",
+ "note": "LOCAL TRIAL ONLY. Known passwords: trial-commissioner, trial-aee, trial-inspector, trial-assistant (assistant1-3). Never use this file on a real deployment.",
  "users": [
   {
+   "key": "commissioner",
    "email": "commissioner@trial.local",
    "name": "Commissioner (trial)",
    "designation": "Municipal Commissioner",
@@ -12,6 +13,7 @@
    "password_hash": "$2b$10$19XYT/hbhttrnetcccvWluhvKVqKiTv3vbjyW.eA7KF2Kbp.FGegK"
   },
   {
+   "key": "aee",
    "email": "aee@trial.local",
    "name": "AEE (trial)",
    "designation": "Assistant Executive Engineer",
@@ -19,9 +21,11 @@
    "all_wards": true,
    "wards": [],
    "must_change_password": false,
-   "password_hash": "$2b$10$UhCLvPNBjUtayTF260Q.Mev6T5GMDXXRMBLHrrHKLafhbR/MY9gOG"
+   "password_hash": "$2b$10$UhCLvPNBjUtayTF260Q.Mev6T5GMDXXRMBLHrrHKLafhbR/MY9gOG",
+   "supervisor": true
   },
   {
+   "key": "inspector",
    "email": "inspector@trial.local",
    "name": "Field Inspector (trial)",
    "designation": "Field Inspector",
@@ -30,6 +34,39 @@
    "wards": [],
    "must_change_password": false,
    "password_hash": "$2b$10$NwV7PeaSjF7ItvdmW9kqa.MabcvBFIT7rmgYKYUHyyvg/VPmCsowO"
+  },
+  {
+   "key": "assistant1",
+   "email": "assistant1@trial.local",
+   "name": "Contracting Assistant 1 (trial)",
+   "designation": "Contracting Assistant",
+   "role": "editor",
+   "all_wards": true,
+   "wards": [],
+   "must_change_password": false,
+   "password_hash": "$2b$10$oI0MlJb74CQWEWpHNEcICumJELBEIAdhgGh.SkFDOMvKYdZ9HC556"
+  },
+  {
+   "key": "assistant2",
+   "email": "assistant2@trial.local",
+   "name": "Contracting Assistant 2 (trial)",
+   "designation": "Contracting Assistant",
+   "role": "editor",
+   "all_wards": true,
+   "wards": [],
+   "must_change_password": false,
+   "password_hash": "$2b$10$atQzHSdUDXRUlNEZjdjwjumoF5WT3EHTtWSF4rgjr1Skl401pamrO"
+  },
+  {
+   "key": "assistant3",
+   "email": "assistant3@trial.local",
+   "name": "Contracting Assistant 3 (trial)",
+   "designation": "Contracting Assistant",
+   "role": "editor",
+   "all_wards": true,
+   "wards": [],
+   "must_change_password": false,
+   "password_hash": "$2b$10$hzSy6n5Q9921a1IZ.hc2fOZdSHH2JNpVpn1QZ6MAEAmuM64b5t85i"
   }
  ]
 }

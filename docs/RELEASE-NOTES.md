@@ -1,5 +1,40 @@
 # Release notes
 
+## v1.2 (6 October 2026)
+
+**For the Commissioner**
+- **Delete issues for good**: Delete on an issue, or tick several in the Issues table → Delete selected…, with a
+  reason. They disappear from the map, lists, dashboard and Excel, with their photos; damage raised from a road is
+  cleared on the road too (noted in its history). The reason is kept in the admin log.
+- **Issues table sorts** by any column (tap the heading; tap again to reverse); the Excel download follows the
+  same order.
+- **Users**: a **Supervisor (AEE)** box: supervisors may correct other field staff's labour entries. Fixed: Reset
+  password, Disable and Enable no longer remove the person's ward access.
+
+**For field staff**
+- **Labour by zone** instead of ward, on a new **Labour** page: table with totals, zone and date filters, sorting,
+  Excel, and the history of every correction.
+- **Corrections for 48 hours after saving**: your own entries; the AEE can correct the Field Inspector's and the
+  contracting assistants' too. Afterwards entries are frozen for field staff; the Commissioner can always correct.
+- **Report issue** has two new problems: **Drain damaged** and **Culvert broken / damaged**.
+- **Three contracting assistant accounts** (assistant1–3@madhira.local) with the same rights as the Field Inspector.
+
+**Your data**
+- Upgrading keeps every record. Labour recorded by ward in v1.0/v1.1 is added up per zone and day (notes joined,
+  original wards noted); the original records are kept unchanged. Checked with the new upgrade check
+  (`server/test/upgrade-check.mjs`): a v1.1 database full of data upgraded with every road, its history, issue,
+  request, photo, network change and labour total intact.
+- New: a one-time **fresh start** tool (`server/scripts/reset-records.mjs`) that deletes recorded data only and keeps
+  the accounts and the Madhira plan. It is never run by an upgrade (see `docs/OPERATIONS.md`).
+
+**For IT**
+- Migration `005_v1_2.sql` (new tables `labour_entries`, `labour_entry_events`, `starting_accounts`; column
+  `users.supervisor`), applied automatically at start-up. The three new accounts are created at the first start of
+  v1.2; existing accounts are never re-created (even if their email was changed).
+- New API: `/api/labour/:id` (PATCH, DELETE, history), `/api/export/labour.xlsx`, `DELETE /api/issues/:id`,
+  `POST /api/issues/delete`. `POST /api/labour` takes `zone` instead of `ward`.
+- The Docker image now includes `server/scripts/`.
+
 ## v1.1 (3 October 2026)
 
 Changes from the field testing of v1.0.

@@ -107,3 +107,19 @@ Run in order: `01_wards_zones_baseline.py`, `02_imagery_tiles.py`, `03_georef_pl
   DELETE, log in `storage_purges` (migration 003). Decision: everything is deletable by the Commissioner.
 - Tests: staging-test 83 checks (PGlite and pg driver); headless UI walk-through with puppeteer-core + system Chrome
   (scratchpad/uitest) when the Browser pane is hidden.
+- 2026-10-03 bug hunt (3 review agents + headless sweeps): ~40 bugs fixed inside v1.1 (tag moved to the fix commit).
+  Key additions: idempotent saves (x-idempotency-key + request_keys, migration 004), outbox bound to user/ordered/
+  temporary-error aware with OutboxSheet, offline start (localStorage user + SW data cache 'ugd-data'), SW v2,
+  pg_advisory_xact_lock for change requests and stretch creation, one stretch per pipe, global 4xx mapping for
+  Zod/PG input errors. Headless note: >5 full reloads over plain HTTP stalled because bfcache pages kept SSE open
+  (fixed: close on pagehide). staging-test now 117 checks.
+
+## v1.2 (2026-10-06)
+- Labour per zone (labour_entries + labour_entry_events; old labour_logs kept, converted by migration 005 summing
+  per zone/day). Edit window 48 h after saving: owner, or supervisor (users.supervisor, AEE) for anyone; admin always.
+- Issues: Commissioner delete (single/bulk, reason, photos removed, road damage cleared via CLEARS, audit_log);
+  table sort (lib/sort.tsx, Excel follows sort); kinds drain_damage, culvert_damage (manual-only).
+- Accounts: starting_accounts keyed creation (bootstrap adds new keys only); assistant1-3@madhira.local added.
+  Fixed: user PATCH schema had zod defaults (password reset/disable cleared wards).
+- Data safety: server/test/upgrade-check.mjs snapshot/compare (run v1.1 -> v1.2: every record kept);
+  server/scripts/reset-records.mjs one-time fresh start (keeps users and plan data).

@@ -13,7 +13,7 @@ module.exports = function itGuide(info) {
         ['Server', '1 × EC2 (Ubuntu 24.04) in Mumbai, ap-south-1, running 3 containers: PostgreSQL, the app, Caddy (HTTPS)'],
         ['Data kept in India', 'Database and photos on the server\'s encrypted disk, nightly backups, daily disk snapshots'],
         ['Code', `Private Git repository (GitHub, GitLab, Bitbucket or your own), tag \`${info.version}\`, created from the package in Part A`],
-        ['Accounts', 'Commissioner, AEE and Field Inspector, created on first start with one-time passwords (in the user guides)'],
+        ['Accounts', 'Commissioner, AEE, Field Inspector and three contracting assistants, created with one-time passwords (in the user guides); an upgrade adds only accounts that are new'],
       ] },
 
       { t: 'h1', text: 'Part 0. What you received' },
@@ -31,7 +31,7 @@ module.exports = function itGuide(info) {
       ] },
       { t: 'h3', text: 'Check the package arrived intact' },
       { t: 'code', text: `sha256sum -c SHA256SUMS.txt        # Linux\nshasum -a 256 -c SHA256SUMS.txt    # macOS\n# expected: madhira-ugd-${info.version}.zip: OK` },
-      { t: 'note', tone: 'warn', label: 'Contains one-time passwords.', text: 'The user guides in `docs/` contain the starting passwords for the three accounts. They stop working once each person signs in and sets their own password, but treat the package as confidential until then.' },
+      { t: 'note', tone: 'warn', label: 'Contains one-time passwords.', text: 'The user guides in `docs/` contain the starting passwords for the six accounts. They stop working once each person signs in and sets their own password, but treat the package as confidential until then.' },
 
       { t: 'h1', text: 'Part A. Git repository' },
       { t: 'p', text: 'The municipality should own the code in its own private repository. The largest file is 21 MB, so any Git host works without Git LFS.' },
@@ -143,9 +143,9 @@ module.exports = function itGuide(info) {
 
       { t: 'h2', text: 'B14. Updates and rollback', newPage: true },
       { t: 'p', text: 'A new release arrives as a new zip. **If you already set up the repository from an earlier zip** (Part A), bring the new files into it on the office machine, then update the server:' },
-      { t: 'code', text: 'cd madhira-ugd                                  # the repository from Part A\nunzip ../madhira-ugd-v1.1.zip -d /tmp/ugd-new\nrsync -a --delete --exclude .git /tmp/ugd-new/madhira-ugd/ ./\ngit add -A && git commit -m "Madhira UGD Tracker v1.1"\ngit tag -a v1.1 -m "Release v1.1" && git push origin main --tags' },
+      { t: 'code', text: 'cd madhira-ugd                                  # the repository from Part A\nunzip ../madhira-ugd-' + info.version + '.zip -d /tmp/ugd-new\nrsync -a --delete --exclude .git /tmp/ugd-new/madhira-ugd/ ./\ngit add -A && git commit -m "Madhira UGD Tracker ' + info.version + '"\ngit tag -a ' + info.version + ' -m "Release ' + info.version + '" && git push origin main --tags' },
       { t: 'p', text: 'On the server:' },
-      { t: 'code', text: 'cd /opt/madhira-ugd\nsh deploy/backup.sh                       # backup first\ngit fetch --tags && git checkout v1.1     # the new release tag\ndocker compose up -d --build              # database changes apply automatically\ndocker compose exec app node server/test/postdeploy-check.mjs https://<DOMAIN>\n# rollback:  git checkout v1.0 && docker compose up -d --build' },
+      { t: 'code', text: 'cd /opt/madhira-ugd\nsh deploy/backup.sh                       # backup first\ngit fetch --tags && git checkout ' + info.version + '     # the new release tag\ndocker compose up -d --build              # database changes apply automatically\ndocker compose exec app node server/test/postdeploy-check.mjs https://<DOMAIN>\n# rollback:  git checkout v1.0 && docker compose up -d --build' },
       { t: 'h2', text: 'B15. Approximate monthly cost (ap-south-1, on-demand)' },
       { t: 'table', head: ['Item', 'Approx. USD / month'], widths: [0.65, 0.35], rows: [
         ['EC2 t3.small (t3.medium ≈ double)', '15–17'],
@@ -170,7 +170,7 @@ module.exports = function itGuide(info) {
       { t: 'h1', text: 'Part C. After go-live', newPage: true },
       { t: 'steps', items: [
         'Send the web address to the Commissioner, with the **Commissioner\'s Guide** (`docs/user-guides/`).',
-        'The Commissioner signs in first, sets a password, and gives the AEE and Field Inspector their sign-ins with the **AEE and Field Inspector Guide**.',
+        'The Commissioner signs in first, sets a password, and gives the AEE, Field Inspector and contracting assistants their sign-ins with the field staff guide (`AEE-and-Field-Inspector-Guide.docx`).',
         'Each of them signs in on their phone, sets a password and adds the app to the home screen.',
         'The Commissioner creates the **Viewer** account for IT (B10); run the full post-deploy check.',
         'Work through `docs/UAT-CHECKLIST.md` together; sign off.',

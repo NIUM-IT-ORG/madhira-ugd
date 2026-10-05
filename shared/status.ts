@@ -266,7 +266,10 @@ export const BADGE_INFO: Record<string, { label: string; colour: string }> = {
 
 // ---------------------------------------------------------------- issues raised from a stretch
 
-export type IssueKind = 'taps_broken' | 'water_leak' | 'drain_clogged' | 'water_stagnation' | 'potholes' | 'uneven_backfill' | 'not_motorable' | 'other'
+export type IssueKind = 'taps_broken' | 'water_leak' | 'drain_clogged' | 'water_stagnation' | 'potholes' | 'uneven_backfill' | 'not_motorable'
+  | 'drain_damage' | 'culvert_damage' | 'other'
+/** Kinds reported by hand only (not one of the 18 status items of a stretch). */
+export type ManualIssueKind = 'drain_damage' | 'culvert_damage' | 'other'
 
 export const ISSUE_KINDS: { key: IssueKind; label: string; severity: 'low' | 'medium' | 'high' }[] = [
   { key: 'drain_clogged', label: 'Drain clogged with gravel', severity: 'high' },
@@ -276,12 +279,14 @@ export const ISSUE_KINDS: { key: IssueKind; label: string; severity: 'low' | 'me
   { key: 'water_stagnation', label: 'Water stagnation', severity: 'medium' },
   { key: 'potholes', label: 'Potholes in trench', severity: 'medium' },
   { key: 'uneven_backfill', label: 'Uneven back-fill', severity: 'low' },
+  { key: 'drain_damage', label: 'Drain damaged', severity: 'medium' },
+  { key: 'culvert_damage', label: 'Culvert broken / damaged', severity: 'high' },
   { key: 'other', label: 'Other', severity: 'medium' },
 ]
 export const issueLabel = (k: string) => ISSUE_KINDS.find((i) => i.key === k)?.label ?? k
 
 /** Issues a stretch's status implies, with their counts (0 = none). */
-export function impliedIssues(s: StretchStatus): Record<Exclude<IssueKind, 'other'>, number> {
+export function impliedIssues(s: StretchStatus): Record<Exclude<IssueKind, ManualIssueKind>, number> {
   return {
     taps_broken: tapsPending(s),
     water_leak: leaksPending(s),

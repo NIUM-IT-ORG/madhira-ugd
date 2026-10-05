@@ -50,6 +50,7 @@ twice (keys kept 30 days, table `request_keys`).
 | `GET /api/issues`, `GET /api/issues/:id` | signed in | List / one with events |
 | `POST /api/issues` `{kind, location, stretch_id?, count, severity?, description, photos?}` | editor (ward), admin | Report (`description` = remark, required; photos optional) |
 | `PATCH /api/issues/:id` `{status?, assigned_to?, due_date?, severity?, note, photos}` | editor (ward), admin | Assign / resolve (note required) / re-open |
+| `DELETE /api/issues/:id` `{reason}` · `POST /api/issues/delete` `{ids, reason}` | admin | Delete for good (photos too; road-raised damage cleared on the road; logged) |
 
 ## Change requests (network)
 
@@ -69,10 +70,13 @@ Manhole `payload`: `{lon, lat, label, gl?, il?}`. Pipe `payload`: `{from, to, di
 | `POST /api/photos` (multipart: `lat`, `lng`, `accuracy`, `taken_at`, then `file`) | Upload a JPEG/PNG/WebP (≤ `MAX_PHOTO_MB`); returns `{id}` |
 | `GET /api/photos/:id` | Photo file (signed-in users only) |
 | `GET /api/activity?limit=` | Recent changes across stretches, issues and requests |
-| `GET /api/labour`, `POST /api/labour` `{log_date, ward, labourers, machines, note}` | Labour log |
+| `GET /api/labour?zone=&from=&to=` | Labour entries per zone per day, each with `editable`, `editable_until` |
+| `POST /api/labour` `{log_date, zone, labourers, machines, note}` | New entry (409 with `id` if the zone and day already have one) |
+| `GET /api/labour/:id`, `PATCH /api/labour/:id`, `DELETE /api/labour/:id` | Entry with history; correct; delete. Admin always; field staff 48 h after saving: own entries, supervisors (AEE) any |
+| `GET /api/export/labour.xlsx?zone=&from=&to=` | Labour Excel |
 | `GET /api/stats/timeline` | Weekly field figures for the dashboard |
 | `GET /api/export/progress.xlsx` | Excel workbook (progress sheet + detail sheets) |
-| `GET /api/export/issues.xlsx?kind=&zone=&ward=&severity=&status=` | Issues only, filtered as on the Issues page |
+| `GET /api/export/issues.xlsx?kind=&zone=&ward=&severity=&status=&sort=&dir=` | Issues only, filtered and sorted as on the Issues page |
 | `GET /api/export/stretches.kml`, `GET /api/export/stretches.geojson` | Google Earth / GIS exports |
 | `GET /api/events` | Live updates (Server-Sent Events) |
 | `GET /api/health` | `{ok, db}` for load balancers and monitoring (no sign-in) |

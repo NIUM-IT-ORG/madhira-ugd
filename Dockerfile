@@ -22,6 +22,7 @@ RUN cd server && npm ci --omit=dev && npm cache clean --force
 COPY server/src ./server/src
 # Post-deployment checks, runnable inside the container: node server/test/postdeploy-check.mjs <url>
 COPY server/test ./server/test
+COPY server/scripts ./server/scripts
 COPY shared ./shared
 COPY data/processed ./data/processed
 # Starting accounts (hashed one-time passwords), used only when the database has no users.

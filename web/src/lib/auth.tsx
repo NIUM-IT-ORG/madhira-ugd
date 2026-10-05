@@ -15,6 +15,7 @@ export interface User {
   active: boolean
   must_change_password: boolean
   last_login_at: string | null
+  supervisor?: boolean // AEE: may correct field staff labour entries
 }
 
 interface AuthState {

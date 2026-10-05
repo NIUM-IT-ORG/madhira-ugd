@@ -204,8 +204,8 @@ detail = await admin.get(`/api/stretches/${st.id}`);
 ok(detail.versions.length >= 8, `full history kept (${detail.versions.length} versions)`);
 
 // ---- misc
-ok((await aee.post('/api/labour', { log_date: '2026-10-01', ward: 10, labourers: 24, machines: 2 })).status === 200, 'AEE logs labour for ward 10');
-ok((await aee.post('/api/labour', { log_date: '2026-10-01', ward: 5, labourers: 10 })).status === 403, 'AEE cannot log labour for unassigned ward');
+ok((await aee.post('/api/labour', { log_date: '2026-10-01', zone: 1, labourers: 24, machines: 2 })).status === 200, 'AEE logs labour for zone 1 (wards 9, 10 are in it)');
+ok((await aee.post('/api/labour', { log_date: '2026-10-01', zone: 2, labourers: 10 })).status === 403, 'AEE cannot log labour for a zone with none of their wards');
 const act = await viewer.get('/api/activity?limit=20');
 ok(act.status === 200 && act.activity.length > 5, `viewer sees activity feed (${act.activity.length} items)`);
 ok((await viewer.patch(`/api/issues/${taps.id}`, { status: 'open', note: 'x' })).status === 403, 'viewer cannot change issues');
@@ -339,9 +339,9 @@ ok((await admin.get('/api/stretches/abc')).status === 404, 'non-id stretch is 40
 ok((await admin.post(`/api/stretches/${sp1.id}/revert`, {})).status === 400, 'revert without a version is 400');
 ok((await admin.patch('/api/users/abc', { name: 'X Y' })).status === 404, 'non-id user is 404');
 ok((await admin.get('/api/activity?limit=-5')).status === 200, 'negative activity limit is handled');
-ok((await aee.post('/api/labour', { log_date: '2026-13-45', ward: 10, labourers: 1 })).status === 400, 'impossible date refused');
+ok((await aee.post('/api/labour', { log_date: '2026-13-45', zone: 1, labourers: 1 })).status === 400, 'impossible date refused');
 const tmr = new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
-ok((await aee.post('/api/labour', { log_date: tmr, ward: 10, labourers: 1 })).status === 400, 'tomorrow refused for labour');
+ok((await aee.post('/api/labour', { log_date: tmr, zone: 1, labourers: 1 })).status === 400, 'tomorrow refused for labour');
 ok((await aee.post('/api/issues', { kind: 'other', location: loc, description: 'x', stretch_id: '00000000-0000-4000-8000-000000000000' })).status === 400, 'issue on a missing stretch is 400');
 const enc = await fetch(base + '/%61pi/labour', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
 ok(enc.status === 403, `encoded path still needs the app header (${enc.status})`);
@@ -362,6 +362,63 @@ const p2 = await up();
 ok(p1.id && p1.id === p2.id, 'resending a photo with the same key does not store it twice');
 const otherUser = await admin.call('POST', '/api/issues', { kind: 'other', location: loc, description: 'Same key, other user' }, { headers: { 'x-idempotency-key': key } });
 ok(otherUser.status === 200 && otherUser.id !== i1.id, 'keys are per user');
+
+// ---- v1.2: labour per zone, 48-hour editing, supervisors
+const { labourRights } = await import('../src/routes/labour.js');
+const hoursAgo = (h) => new Date(Date.now() - h * 3600000).toISOString();
+ok(!labourRights({ role: 'editor', id: 'a' }, { user_id: 'a', created_at: hoursAgo(49) }).edit, 'own entry frozen after 48 hours');
+ok(labourRights({ role: 'editor', id: 'a' }, { user_id: 'a', created_at: hoursAgo(47) }).edit, 'own entry editable within 48 hours');
+ok(!labourRights({ role: 'editor', id: 'a' }, { user_id: 'b', created_at: hoursAgo(1) }).edit, "field staff cannot edit someone else's entry");
+ok(labourRights({ role: 'editor', id: 'a', supervisor: true }, { user_id: 'b', created_at: hoursAgo(1) }).edit, "supervisor (AEE) can edit others' entries within 48 hours");
+ok(!labourRights({ role: 'editor', id: 'a', supervisor: true }, { user_id: 'b', created_at: hoursAgo(50) }).edit, 'supervisor cannot edit after 48 hours');
+ok(labourRights({ role: 'admin', id: 'c' }, { user_id: 'b', created_at: hoursAgo(500) }).edit, 'Commissioner can always edit');
+const mi = await admin.post('/api/users', { email: `test.insp.${stamp}@madhira.local`, name: 'Test Inspector', role: 'editor', wards: [9] });
+const insp = client();
+await signIn(insp, mi.user.email, mi.temp_password);
+const L1 = await aee.post('/api/labour', { log_date: '2026-09-30', zone: 1, labourers: 20, machines: 1, note: 'Team A' });
+ok(L1.status === 200 && L1.id, 'labour entry created');
+const L1dup = await insp.post('/api/labour', { log_date: '2026-09-30', zone: 1, labourers: 5 });
+ok(L1dup.status === 409 && L1dup.id === L1.id, 'second entry for the same zone and day points to the existing one');
+ok((await aee.patch(`/api/labour/${L1.id}`, { labourers: 22 })).status === 200, 'owner corrects the entry');
+ok((await insp.patch(`/api/labour/${L1.id}`, { labourers: 99 })).status === 403, "an inspector cannot change the AEE's entry");
+const L2 = await insp.post('/api/labour', { log_date: '2026-09-29', zone: 1, labourers: 15 });
+ok((await aee.patch(`/api/labour/${L2.id}`, { labourers: 16 })).status === 403, 'a non-supervisor editor cannot change others');
+ok((await admin.patch(`/api/users/${mk.user.id}`, { supervisor: true })).status === 200, 'Commissioner makes the AEE a supervisor');
+const aeeUser = (await admin.get('/api/users')).users.find((u) => u.id === mk.user.id);
+ok(aeeUser.supervisor === true && aeeUser.wards.join() === '9,10,21,22', 'supervisor set, wards unchanged');
+await new Promise((r) => setTimeout(r, 15500)); // the server caches users for 15 s
+ok((await aee.patch(`/api/labour/${L2.id}`, { labourers: 17, note: 'corrected by AEE' })).status === 200, "the AEE (supervisor) corrects the inspector's entry");
+const h = await admin.get(`/api/labour/${L2.id}`);
+ok(h.events.length === 2 && h.events[0].action === 'edit' && h.entry.labourers === 17, `history kept (${h.events.length} events)`);
+ok((await viewer.post('/api/labour', { log_date: '2026-09-28', zone: 1, labourers: 1 })).status === 403, 'viewer cannot log labour');
+const list = await aee.get('/api/labour?zone=1&from=2026-09-01');
+ok(list.entries.length >= 2 && list.entries.every((e) => e.zone === 1 && typeof e.editable === 'boolean'), 'labour list filters by zone and says what is editable');
+const lx = await admin.call('GET', '/api/export/labour.xlsx?zone=1', undefined, { raw: true });
+ok(lx.status === 200 && /spreadsheet/.test(lx.headers.get('content-type')), 'labour Excel downloads');
+ok((await aee.del(`/api/labour/${L2.id}`)).status === 200, 'supervisor deletes an entry within 48 hours');
+// resetting a password must not remove the wards (bug fixed in v1.2)
+await admin.patch(`/api/users/${mi.user.id}`, { reset_password: true });
+ok((await admin.get('/api/users')).users.find((u) => u.id === mi.user.id).wards.join() === '9', 'password reset keeps the wards');
+
+// ---- v1.2: new issue kinds; Commissioner deletes issues for good
+const cv = await aee.post('/api/issues', { kind: 'culvert_damage', location: loc, description: 'Culvert slab broken' });
+const dd = await aee.post('/api/issues', { kind: 'drain_damage', location: loc, description: 'Drain wall cracked' });
+ok(cv.status === 200 && dd.status === 200, 'culvert and drain damage can be reported');
+ok((await admin.get(`/api/issues/${cv.id}`)).issue.severity === 'high', 'culvert damage is high severity');
+ok((await aee.del(`/api/issues/${cv.id}`, { reason: 'x' })).status === 403, 'only the Commissioner deletes issues');
+ok((await admin.del(`/api/issues/${cv.id}`, {})).status === 400, 'deleting needs a reason');
+ok((await admin.del(`/api/issues/${cv.id}`, { reason: 'Duplicate report' })).status === 200, 'Commissioner deletes an issue');
+ok((await admin.get(`/api/issues/${cv.id}`)).status === 404, 'the issue is gone');
+const ds = await admin.post('/api/stretches', { geometry: one(free[4]), pipe_ids: [free[4].properties.id], status: { hazards: { potholes: 2 } } });
+let dsd = await admin.get(`/api/stretches/${ds.id}`);
+const potIssue = dsd.issues.find((i) => i.kind === 'potholes');
+ok((await admin.del(`/api/issues/${potIssue.id}`, { reason: 'Recorded on the wrong road' })).status === 200, 'Commissioner deletes an issue raised from a road');
+dsd = await admin.get(`/api/stretches/${ds.id}`);
+ok(dsd.stretch.properties.status.hazards.potholes === 0 && dsd.versions[0].kind === 'issue_deleted', 'the damage is cleared on the road and recorded in its history');
+await admin.patch(`/api/stretches/${ds.id}`, { base_version: dsd.stretch.properties.version, changes: [{ path: 'sewer.ics_built', to: 1 }] });
+ok(!(await admin.get(`/api/stretches/${ds.id}`)).issues.length, 'the next save of the road does not raise it again');
+const bulkDel = await admin.post('/api/issues/delete', { ids: [dd.id, ni.id], reason: 'Test clean-up' });
+ok(bulkDel.status === 200 && bulkDel.deleted.length === 2, 'several issues deleted at once');
 
 // ---- clean up test users (deactivate)
 await admin.patch(`/api/users/${mk.user.id}`, { active: false });

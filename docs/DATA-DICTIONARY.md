@@ -81,7 +81,7 @@ One entry per progress-sheet row (Zone 2's wards 5, 6, 7 are one row): `zone`, `
 
 | Table | One row per | Key columns |
 | --- | --- | --- |
-| `users` | person | `email` (sign-in), `name`, `designation`, `role` (`admin`/`editor`/`viewer`), `all_wards`, `wards[]`, `active`, `must_change_password`, `password_hash` (bcrypt), `token_version` |
+| `users` | person | `email` (sign-in), `name`, `designation`, `role` (`admin`/`editor`/`viewer`), `supervisor` (AEE: corrects others' labour), `all_wards`, `wards[]`, `active`, `must_change_password`, `password_hash` (bcrypt), `token_version` |
 | `stretches` | road stretch (current state) | `code` (W9-012), `name`, `ward`, `zone`, `geometry` (GeoJSON), `length_m`, `pipe_ids[]`, `planned_mh`, `status` (JSON, §2), `approval`, `stage`, `open_issues`, `version`, `record_state` (`proposed`/`active`/`rejected`), `deleted_at` |
 | `stretch_versions` | change to a stretch (never changed; older entries can be deleted by the Commissioner on the Storage page, the latest is always kept) | `stretch_id`, `version`, `kind` (create/update/bulk/approve/reject/revert/geometry/delete/issue_resolved), `user_id`, `at`, `changes` (field, from, to), `status` (full snapshot), `note`, `photos[]`, `gps`, `gps_distance_m`, `flagged_far`, `warnings`, `batch_id` |
 | `issues` | problem | `code` (I-0001), `kind`, `stretch_id`, `ward`, `location` [lon, lat], `count`, `severity`, `status` (open/assigned/resolved), `assigned_to`, `due_date`, `photos[]`, `source` (manual/stretch), reporter / resolver and times, `resolution_note` |
@@ -89,7 +89,10 @@ One entry per progress-sheet row (Zone 2's wards 5, 6, 7 are one row): `zone`, `
 | `photos` | uploaded photo | `path` (under `VAR_DIR/uploads`), `mime`, `bytes`, `lat`, `lng`, `accuracy`, `taken_at`, `uploaded_by` |
 | `change_requests` | proposed addition / deletion | `code` (CR-0001), `entity` (stretch/pipe/manhole), `action` (add/delete), `target_id`, `payload`, `reason`, `status` (pending/approved/rejected/withdrawn), requester / decider, `decision_note` |
 | `network_edits` | approved network change | `kind` (pipe/manhole), `feature_id`, `op` (add/delete), `geometry`, `properties`, `change_request_id` — applied in order over the plan network at start-up |
-| `labour_logs` | ward per day | `log_date`, `ward`, `labourers`, `machines`, `note` |
+| `labour_entries` | zone per day (v1.2) | `log_date`, `zone`, `labourers`, `machines`, `note`, `user_id` (entered by), `created_at` (48-hour edit window), `updated_by`, `updated_at`, `legacy_wards` (converted from v1.1 ward records) |
+| `labour_entry_events` | change to a labour entry | `entry_id`, `user_id`, `at`, `action` (create/edit), `changes` |
+| `labour_logs` | ward per day (v1.0–v1.1; kept unchanged, no longer used) | `log_date`, `ward`, `labourers`, `machines`, `note` |
+| `starting_accounts` | starting account already created | `key` (e.g. `assistant1`): a release adds accounts from `deploy/initial-users.json` once, never re-creating one |
 | `audit_log` | sign-in, user and admin action | `at`, `user_id`, `action`, `entity`, `entity_id`, `detail`, `ip` |
 | `counters` | code sequence | `name`, `value` |
 | `request_keys` | answered save (30 days) | `key`, `user_id`, `status`, `body`, `at`: a resent save gets the first answer |

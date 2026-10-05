@@ -20,6 +20,8 @@ you try everything without touching real records.
 - [ ] Download Excel opens in Excel; the KML opens in Google Earth
 - [ ] Users page lists Commissioner, AEE and Field Inspector
 - [ ] Issues page: choose Zone 2, then Ward 5; Download Excel gives only those issues
+- [ ] Issues Table view: tap Severity to sort; tick two issues → Delete selected… with a reason → they are gone (and Download Excel follows the sort)
+- [ ] Users: the AEE has "Supervisor" ticked; three Contracting Assistant accounts are listed
 - [ ] Storage page: usage shows; choose a date and Photos; Will delete shows a number; Download archive first gives a zip (do not delete on the live system during acceptance unless intended)
 
 ## AEE and Field Inspector (on their phones)
@@ -34,7 +36,9 @@ you try everything without touching real records.
 - [ ] Report issue: Report stays grey until a remark is written; it sends without a photo
 - [ ] Propose a manhole and a pipe; Commissioner approves the manhole, then the pipe
 - [ ] Switch the phone to airplane mode, save an update, switch back: it is sent automatically
-- [ ] Log labour for today
+- [ ] Log labour for today for a zone; correct it (Labour → Edit) and see the correction under History
+- [ ] As a contracting assistant: log labour; as the AEE: correct that entry; as the Field Inspector: it shows "View only"
+- [ ] Report issue offers "Drain damaged" and "Culvert broken / damaged"
 
 ## Demo data (optional, test copies only)
 

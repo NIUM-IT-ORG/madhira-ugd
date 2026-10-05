@@ -14,9 +14,10 @@ import { ChangePasswordPage, LoginPage } from './pages/Login'
 import MapPage from './pages/MapPage'
 import UsersPage from './pages/UsersPage'
 import StoragePage from './pages/StoragePage'
+import LabourPage from './pages/LabourPage'
 
-type Route = 'map' | 'dashboard' | 'issues' | 'approvals' | 'activity' | 'users' | 'storage' | 'account'
-const ROUTES: Route[] = ['map', 'dashboard', 'issues', 'approvals', 'activity', 'users', 'storage', 'account']
+type Route = 'map' | 'dashboard' | 'issues' | 'approvals' | 'labour' | 'activity' | 'users' | 'storage' | 'account'
+const ROUTES: Route[] = ['map', 'dashboard', 'issues', 'approvals', 'labour', 'activity', 'users', 'storage', 'account']
 const routeOf = (path: string): Route => {
   const r = path.replace(/^\/+/, '').split('/')[0] as Route
   return ROUTES.includes(r) ? r : 'map'
@@ -84,6 +85,7 @@ function Shell() {
     { r: 'dashboard', label: 'Dashboard' },
     { r: 'issues', label: 'Issues', badge: openIssues },
     { r: 'approvals', label: isAdmin ? 'Approvals' : 'My requests', badge: waiting },
+    { r: 'labour', label: 'Labour' },
     { r: 'activity', label: 'Activity' },
     { r: 'users', label: 'Users', admin: true },
     { r: 'storage', label: 'Storage', admin: true },
@@ -136,8 +138,9 @@ function Shell() {
         {/* The map stays mounted so switching pages is instant. */}
         <div className={`route ${view === 'map' ? 'shown' : 'hidden'}`}><MapPage toast={toast.show} focus={focus} /></div>
         {view === 'dashboard' && <div className="route shown scroll"><DashboardPage onShow={show} /></div>}
-        {view === 'issues' && <div className="route shown scroll"><IssuesPage onShow={show} /></div>}
+        {view === 'issues' && <div className="route shown scroll"><IssuesPage onShow={show} toast={toast.show} /></div>}
         {view === 'approvals' && <div className="route shown scroll"><ApprovalsPage onShow={show} toast={toast.show} /></div>}
+        {view === 'labour' && <div className="route shown scroll"><LabourPage toast={toast.show} /></div>}
         {view === 'activity' && <div className="route shown scroll"><ActivityPage onShow={show} /></div>}
         {view === 'users' && isAdmin && <div className="route shown scroll"><UsersPage toast={toast.show} /></div>}
         {view === 'storage' && isAdmin && <div className="route shown scroll"><StoragePage toast={toast.show} /></div>}

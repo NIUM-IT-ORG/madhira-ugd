@@ -27,7 +27,8 @@ export interface BaselineGroupLike {
   sanctioned: { pipe_m: number; manholes: number; ics: number }
   executed: { pipe_m: number; manholes: number; ics: number }
 }
-export interface LabourLike { log_date: string; ward: number; zone: number; labourers: number; machines: number }
+/** Labour is recorded per zone per day (v1.2); ward rows show no labour figure. */
+export interface LabourLike { log_date: string; zone: number; labourers: number; machines: number }
 
 export interface FieldFigures {
   stretches: number
@@ -105,9 +106,10 @@ const sum3 = (a: { pipe_m: number; manholes: number; ics: number }, b: { pipe_m:
 })
 const zero3 = () => ({ pipe_m: 0, manholes: 0, ics: 0 })
 
-function labourAvg(logs: LabourLike[], wards: number[], days: number, today: Date) {
-  const from = new Date(today.getTime() - days * 86400000).toISOString().slice(0, 10)
-  const rows = logs.filter((l) => wards.includes(l.ward) && l.log_date >= from)
+function labourAvg(logs: LabourLike[], zones: number[], days: number, today: Date) {
+  // Days counted in India time: "last 7 days" = the 7 calendar days up to today.
+  const from = new Date(today.getTime() - (days - 1) * 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+  const rows = logs.filter((l) => zones.includes(l.zone) && l.log_date >= from)
   if (!rows.length) return null
   const byDay = new Map<string, number>()
   for (const r of rows) byDay.set(r.log_date, (byDay.get(r.log_date) ?? 0) + r.labourers)
@@ -133,7 +135,7 @@ export function progressTable(
     zone: g.zone, wards: g.wards, locality: g.locality,
     sanctioned: { ...g.sanctioned }, reported: { ...g.executed }, field: emptyField(),
     issues_open: 0, issues_high: 0, issues_overdue: 0,
-    labour_avg_7d: labourAvg(labour, g.wards, 7, today), labour_avg_30d: labourAvg(labour, g.wards, 30, today),
+    labour_avg_7d: null, labour_avg_30d: null,
   }))
   for (const s of stretches) {
     const i = groupOfWard.get(s.ward)
@@ -159,8 +161,8 @@ export function progressTable(
       issues_open: list.reduce((a, r) => a + r.issues_open, 0),
       issues_high: list.reduce((a, r) => a + r.issues_high, 0),
       issues_overdue: list.reduce((a, r) => a + r.issues_overdue, 0),
-      labour_avg_7d: labourAvg(labour, wards, 7, today),
-      labour_avg_30d: labourAvg(labour, wards, 30, today),
+      labour_avg_7d: labourAvg(labour, zone ? [zone] : [1, 2, 3, 4], 7, today),
+      labour_avg_30d: labourAvg(labour, zone ? [zone] : [1, 2, 3, 4], 30, today),
     }
   }
   const zones = [1, 2, 3, 4].map((z) => ({ zone: combine(`z${z}`, `Zone ${z}`, z, rows.filter((r) => r.zone === z)), rows: rows.filter((r) => r.zone === z) }))

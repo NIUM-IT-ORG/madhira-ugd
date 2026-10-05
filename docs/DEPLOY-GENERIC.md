@@ -39,7 +39,7 @@ also gets a free HTTPS certificate automatically.
    docker compose logs -f app     # wait for "Server listening", then Ctrl+C
    ```
 5. Check it: `docker compose exec app node server/test/postdeploy-check.mjs https://<DOMAIN>`.
-6. Hand over the user guides (`docs/user-guides/*.docx`). The Commissioner, AEE and Field Inspector accounts
+6. Hand over the user guides (`docs/user-guides/*.docx`). The Commissioner, AEE, Field Inspector and contracting assistant accounts
    were created on first start; each person signs in with the one-time password in their guide and sets
    their own password.
 

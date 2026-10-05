@@ -2,6 +2,7 @@
  "note": "Accounts created on the very first start (empty database). Passwords are stored only as bcrypt hashes; the one-time passwords are given to the users in their guides and must be changed at first sign-in.",
  "users": [
   {
+   "key": "commissioner",
    "email": "commissioner@madhira.local",
    "name": "Commissioner",
    "designation": "Municipal Commissioner",
@@ -11,15 +12,18 @@
    "password_hash": "$2b$10$ILPynZ23c/434d/InnPCT.cSIZQczF4km7MDjP20eTF9wE6rU3mxy"
   },
   {
+   "key": "aee",
    "email": "aee@madhira.local",
    "name": "AEE",
    "designation": "Assistant Executive Engineer",
    "role": "editor",
    "all_wards": true,
    "wards": [],
-   "password_hash": "$2b$10$6f4orm0j.BkfZmn9hXKTbO32sHEZt/uFA1nJmFB1sxJjvVpjAcgh."
+   "password_hash": "$2b$10$6f4orm0j.BkfZmn9hXKTbO32sHEZt/uFA1nJmFB1sxJjvVpjAcgh.",
+   "supervisor": true
   },
   {
+   "key": "inspector",
    "email": "inspector@madhira.local",
    "name": "Field Inspector",
    "designation": "Field Inspector",
@@ -27,6 +31,36 @@
    "all_wards": true,
    "wards": [],
    "password_hash": "$2b$10$PL0VLQmWLjq5qbSUfDZOLeTlP85UU28TmIL/JAB00KVdJFKRyIDEi"
+  },
+  {
+   "key": "assistant1",
+   "email": "assistant1@madhira.local",
+   "name": "Contracting Assistant 1",
+   "designation": "Contracting Assistant",
+   "role": "editor",
+   "all_wards": true,
+   "wards": [],
+   "password_hash": "$2b$10$BLQoCrn0eeYSKUexNvP0K.viSntqDhGkUQ/fFjgxDdBG00h6uTmQW"
+  },
+  {
+   "key": "assistant2",
+   "email": "assistant2@madhira.local",
+   "name": "Contracting Assistant 2",
+   "designation": "Contracting Assistant",
+   "role": "editor",
+   "all_wards": true,
+   "wards": [],
+   "password_hash": "$2b$10$yQQVdSVQX178yGBY5KR7nu2zGekDXsrFFz0FJEDIywqNGxASoKlN."
+  },
+  {
+   "key": "assistant3",
+   "email": "assistant3@madhira.local",
+   "name": "Contracting Assistant 3",
+   "designation": "Contracting Assistant",
+   "role": "editor",
+   "all_wards": true,
+   "wards": [],
+   "password_hash": "$2b$10$aCu4HdQNmkMdSGbRN4y6CeVAZ142/z7D0GiQRpgK3Ofm9aPdl6Rye"
   }
  ]
 }

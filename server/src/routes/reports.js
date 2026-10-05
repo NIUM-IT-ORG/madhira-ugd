@@ -2,6 +2,7 @@ import ExcelJS from 'exceljs';
 import { STAGES, ISSUE_KINDS, label, normaliseStatus } from '../../../shared/status.ts';
 import { addStretch, emptyField, progressTable } from '../../../shared/stats.ts';
 import { reference, wardOfGeometry } from '../reference.js';
+import { listLabour } from './labour.js';
 
 const issueLabel = (k) => ISSUE_KINDS.find((i) => i.key === k)?.label ?? k;
 // Report dates in local (India) time; TIME_ZONE can override.
@@ -23,10 +24,7 @@ async function loadAll(db) {
      from issues i left join stretches s on s.id = i.stretch_id left join users ru on ru.id = i.reported_by
      left join users xu on xu.id = i.resolved_by order by i.reported_at`,
   )).rows;
-  const labour = (await db.query(
-    `select to_char(l.log_date, 'YYYY-MM-DD') as log_date, l.ward, l.zone, l.labourers, l.machines, l.note, u.name as user_name
-     from labour_logs l left join users u on u.id = l.user_id order by l.log_date`,
-  )).rows;
+  const labour = (await listLabour(db)).reverse(); // oldest first
   return { stretches, issues, labour };
 }
 
@@ -51,6 +49,17 @@ function addIssuesSheet(wb, issues) {
       i.reported_by_name, ist(i.reported_at), i.resolved_by_name, ist(i.resolved_at), i.resolution_note, i.description]);
   }
   dateCols(is, 12, 14);
+}
+
+function addLabourSheet(wb, labour) {
+  const ls = wb.addWorksheet('Labour', { views: [{ state: 'frozen', ySplit: 1 }] });
+  ls.columns = [['Date', 12], ['Zone', 6], ['Labourers', 10], ['Machines', 10], ['Note', 36], ['Entered by', 20], ['Entered', 18],
+    ['Last changed by', 20], ['Last changed', 18]].map(([header, width]) => ({ header, width }));
+  ls.getRow(1).font = { bold: true };
+  for (const l of labour) ls.addRow([l.log_date, l.zone, l.labourers, l.machines, l.note, l.user_name, ist(l.created_at), l.updated_by_name, ist(l.updated_at)]);
+  dateCols(ls, 7, 9);
+  const n = labour.length + 1;
+  if (labour.length) ls.addRow(['Total', '', { formula: `SUM(C2:C${n})` }, { formula: `SUM(D2:D${n})` }]).font = { bold: true };
 }
 
 const esc = (s) => String(s ?? '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]);
@@ -170,10 +179,7 @@ export function registerReportRoutes(app, db) {
 
     addIssuesSheet(wb, issues);
 
-    const ls = wb.addWorksheet('Labour');
-    ls.columns = [['Date', 12], ['Zone', 6], ['Ward', 6], ['Labourers', 10], ['Machines', 10], ['Note', 30], ['Entered by', 18]].map(([header, width]) => ({ header, width }));
-    ls.getRow(1).font = { bold: true };
-    for (const l of labour) ls.addRow([l.log_date, l.zone, l.ward, l.labourers, l.machines, l.note, l.user_name]);
+    addLabourSheet(wb, labour);
 
     const cr = (await db.query(
       `select c.*, ru.name as rn, du.name as dn from change_requests c left join users ru on ru.id = c.requested_by
@@ -193,12 +199,41 @@ export function registerReportRoutes(app, db) {
     return reply.send(Buffer.from(buf));
   });
 
+  // Labour only, with the filters of the Labour page (zone, from, to).
+  app.get('/api/export/labour.xlsx', auth, async (req, reply) => {
+    const f = req.query ?? {};
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Madhira UGD Tracker';
+    addLabourSheet(wb, (await listLabour(db, f)).reverse());
+    const buf = await wb.xlsx.writeBuffer();
+    const tag = f.zone ? `-zone${Number(f.zone)}` : '';
+    reply
+      .header('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      .header('content-disposition', `attachment; filename="UGD-labour${tag}-${today()}.xlsx"`);
+    return reply.send(Buffer.from(buf));
+  });
+
   // Issues only, with the filters of the Issues page (kind, zone, ward, severity, status).
   app.get('/api/export/issues.xlsx', auth, async (req, reply) => {
     const f = req.query ?? {};
     const { issues } = await loadAll(db);
     const list = issues.filter((i) => (!f.kind || i.kind === f.kind) && (!f.zone || String(i.zone) === String(f.zone)) &&
       (!f.ward || String(i.ward) === String(f.ward)) && (!f.severity || i.severity === f.severity) && (!f.status || i.status === f.status));
+    // Same order as the Issues table (sort, dir); default newest first.
+    const rank = { high: 3, medium: 2, low: 1, open: 1, assigned: 2, resolved: 3 };
+    const KEYS = {
+      code: (i) => i.code, kind: (i) => issueLabel(i.kind), ward: (i) => i.ward, stretch: (i) => i.stretch_code, severity: (i) => rank[i.severity],
+      status: (i) => rank[i.status], assigned: (i) => i.assigned_to, by: (i) => i.reported_by_name,
+      days: (i) => (i.status === 'resolved' ? null : -new Date(i.reported_at).getTime()), reported: (i) => new Date(i.reported_at).getTime(),
+    };
+    const key = KEYS[f.sort] ?? KEYS.reported;
+    const sign = f.dir === 'asc' ? 1 : -1;
+    list.sort((a, b) => {
+      const x = key(a), y = key(b);
+      if (x == null || x === '') return y == null || y === '' ? 0 : 1;
+      if (y == null || y === '') return -1;
+      return (typeof x === 'number' && typeof y === 'number' ? x - y : String(x).localeCompare(String(y), 'en-IN', { numeric: true })) * sign;
+    });
     const wb = new ExcelJS.Workbook();
     wb.creator = 'Madhira UGD Tracker';
     addIssuesSheet(wb, list);

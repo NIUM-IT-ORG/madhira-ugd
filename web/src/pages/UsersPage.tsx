@@ -50,6 +50,7 @@ function UserForm({ existing, onClose, onDone }: { existing?: User; onClose: () 
   const [role, setRole] = useState<Role>(existing?.role ?? 'editor')
   const [wards, setWards] = useState<number[]>(existing?.wards ?? [])
   const [allWards, setAllWards] = useState(existing?.all_wards ?? false)
+  const [supervisor, setSupervisor] = useState(existing?.supervisor ?? false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   return (
@@ -60,7 +61,7 @@ function UserForm({ existing, onClose, onDone }: { existing?: User; onClose: () 
           setBusy(true)
           setError(null)
           try {
-            const body = { email, name, designation: designation || null, phone: phone || null, role, wards, all_wards: allWards }
+            const body = { email, name, designation: designation || null, phone: phone || null, role, wards, all_wards: allWards, supervisor: role === 'editor' && supervisor }
             const r = existing
               ? await patch<{ user: User }>(`/api/users/${existing.id}`, body)
               : await post<{ user: User; temp_password: string }>('/api/users', body)
@@ -86,6 +87,10 @@ function UserForm({ existing, onClose, onDone }: { existing?: User; onClose: () 
         <Field label="Wards this person may update" hint="AEEs can only record, propose and resolve in these wards.">
           <WardPicker value={wards} all={allWards} onChange={setWards} onAll={setAllWards} />
         </Field>
+      )}
+      {role === 'editor' && (
+        <label className="check"><input type="checkbox" checked={supervisor} onChange={(e) => setSupervisor(e.target.checked)} />
+          Supervisor (AEE): may correct labour entries of other field staff during their 48-hour edit window</label>
       )}
       {error && <div className="form-error">{error}</div>}
     </Sheet>
@@ -117,7 +122,7 @@ export default function UsersPage({ toast }: { toast: (m: string, t?: 'ok' | 'wa
               <tr key={u.id} className={u.active ? '' : 'inactive'}>
                 <td><b>{u.name}</b>{u.designation ? <div className="muted small">{u.designation}</div> : null}</td>
                 <td>{u.email}</td>
-                <td>{roleLabel(u.role)}</td>
+                <td>{roleLabel(u.role)}{u.supervisor ? <div className="muted small">Supervisor</div> : null}</td>
                 <td>{u.role === 'editor' ? (u.all_wards ? 'All' : u.wards.join(', ') || 'None yet') : u.role === 'admin' ? 'All' : '—'}</td>
                 <td>{u.last_login_at ? timeAgo(u.last_login_at) : 'Never'}</td>
                 <td>{u.active ? (u.must_change_password ? 'Must set password' : 'Active') : 'Disabled'}</td>

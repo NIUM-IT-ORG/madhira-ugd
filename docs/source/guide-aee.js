@@ -9,7 +9,7 @@ module.exports = function aeeGuide(root, creds) {
   return {
     kicker: 'MADHIRA UGD TRACKER',
     title: 'AEE Step-by-Step Guide',
-    subtitle: 'Version 1.1 · October 2026 · for the Assistant Executive Engineer, on site with a phone',
+    subtitle: 'Version 1.2 · October 2026 · for the Assistant Executive Engineer, on site with a phone',
     header: 'Madhira UGD Tracker · AEE Step-by-Step Guide',
     footer: 'Madhira Municipality · Underground Drainage Scheme',
     blocks: [
@@ -25,7 +25,7 @@ module.exports = function aeeGuide(root, creds) {
         ['Remove a wrong road, pipe or manhole', 'Task G'],
         ['See if the Commissioner approved my requests', 'Task H'],
         ['Update many roads at once', 'Task I'],
-        ['Record labour and machines for the day', 'Task J'],
+        ['Record and correct labour and machines for the day', 'Task J'],
         ['Work where there is no signal', 'Task K'],
         ['A daily routine, problems and a one-page card', 'Sections 4–6'],
       ] },
@@ -55,7 +55,7 @@ module.exports = function aeeGuide(root, creds) {
       { t: 'shots', items: [s('home', 'The map as you see it'), s('menu', 'The menu: tap your initial (top right)')] },
       { t: 'table', head: ['On the screen', 'What it is for'], widths: [0.32, 0.68], rows: [
         ['Green dot (top right)', 'Live: what you save reaches the Commissioner at once. Grey means you are offline.'],
-        ['Your initial "A"', 'The menu: Map, Dashboard, Issues, My requests, Activity, Log labour, Change password, Sign out'],
+        ['Your initial "A"', 'The menu: Map, Dashboard, Issues, My requests, Labour, Activity, Log labour, Change password, Sign out'],
         ['**Layers & search**', 'Find a stretch (W15-002), a manhole (MH-2147), a ward ("Ward 15") or a road name; legend, filters and layers'],
         ['**Overall · Sewer work · Road restoration · Motorability…**', 'Colours the roads by that topic'],
         ['+ and − / arrow / target', 'Zoom in and out / turn the map north / show where you are standing'],
@@ -130,7 +130,7 @@ module.exports = function aeeGuide(root, creds) {
       { t: 'steps', items: [
         'Tap **Report issue** at the bottom of the map, or **Report issue** on a stretch card.',
         'Tap the exact spot of the problem on the map.',
-        'Choose **What is the problem?**, set **How many** and the **Severity** (Low / Medium / High).',
+        'Choose **What is the problem?** (besides the road items there are **Drain damaged** and **Culvert broken / damaged**), set **How many** and the **Severity** (Low / Medium / High).',
         'Write the **Remark** (required): what and where, e.g. "Water pipe leaking at the junction, near the hand pump". **Report** stays grey until you do.',
         'Add a photo if you can (**+ Photo**, optional), then tap **Report**. A red "!" appears at the spot.',
       ] },
@@ -138,13 +138,13 @@ module.exports = function aeeGuide(root, creds) {
 
       { t: 'h1', text: 'Task D. Follow up and close an issue' },
       { t: 'steps', items: [
-        'Menu (your initial) → **Issues**. The top shows open, high-severity and **overdue** counts. Use the filters to see one kind, zone, **ward**, severity or status (choose the zone first and the ward list shows only its wards). **Download Excel** saves the list you are looking at.',
+        'Menu (your initial) → **Issues**. The top shows open, high-severity and **overdue** counts. Use the filters to see one kind, zone, **ward**, severity or status (choose the zone first and the ward list shows only its wards). In **Table** view, tap a column heading to sort by it (tap again to reverse). **Download Excel** saves the list you are looking at, in the same order.',
         'Tap an issue card: the map flies to it and its details open.',
         'To hand it to the contractor: **Assign** → who (e.g. "Contractor site engineer") and a **Due date** → **Assign**. Past the due date it shows **Overdue**.',
         'When it is fixed: **Mark resolved** → write **How was it fixed?** (required) → add a **photo of the fix** (recommended) → **Resolve**.',
         'Came back? Open it and tap **Re-open** with a note.',
       ] },
-      { t: 'shots', items: [s('issues-board', 'D.1: Issues in Zone 2, Ward 5'), s('issue-open', 'D.2: issue details')] },
+      { t: 'shots', items: [s('issues-board', 'D.1: Issues in Zone 2, Ward 5'), s('issues-table', 'D.1: Table view, tap a heading to sort'), s('issue-open', 'D.2: issue details')] },
       { t: 'shots', items: [s('issue-resolve', 'D.4: how it was fixed'), s('issue-resolved', 'D.4: resolved, with history')] },
 
       { t: 'h1', text: 'Task E. Add a manhole missing from the map' },
@@ -190,13 +190,16 @@ module.exports = function aeeGuide(root, creds) {
       { t: 'note', tone: 'info', label: 'Note.', text: 'Record CC restoration one stretch at a time (Task B), because each needs its own photo.' },
       { t: 'shots', items: [s('select', 'I.1: tap the stretches'), s('bulk', 'I.2: set only what changed')] },
 
-      { t: 'h1', text: 'Task J. Log labour and machines' },
+      { t: 'h1', text: 'Task J. Log and correct labour and machines' },
+      { t: 'p', text: 'Labour is recorded **per zone per day**: one entry for each zone worked that day.' },
       { t: 'steps', items: [
-        'Menu → **Log labour**.',
-        'Check the **Date**, choose the **Ward**, set the number of **Labourers on site** and **Machines** (JCB, roller…), add a note (e.g. "contractor team B"). Tap **Save**.',
-        'One entry per ward per day. Saving again for the same ward and day replaces the earlier figure.',
+        'Menu → **Labour** (or **Log labour** in the menu). The Labour page lists the entries with totals; filter by zone and dates, or **Download Excel**.',
+        'Tap **+ Log labour**: check the **Date**, choose the **Zone**, set **Labourers on site** and **Machines** (JCB, roller…), add a note (e.g. "contractor team B, wards 9 and 10"). Tap **Save**.',
+        'Made a mistake? Tap **Edit** on the entry, correct it and tap **Save correction**. **History** shows every correction: who, when, old and new value.',
+        'You can correct entries for **48 hours after they were saved**: your own and, as the AEE, those of the Field Inspector and the contracting assistants. After that they show **🔒 Frozen**: ask the Commissioner to correct them.',
+        'If the zone and day already have an entry, the app offers **Open the existing entry**: correct that one instead of adding a second.',
       ] },
-      { t: 'shots', items: [s('labour', 'Log labour')] },
+      { t: 'shots', items: [s('labour-page', 'J.1: Labour page'), s('labour-form', 'J.2: zone, labourers, machines'), s('labour-history', 'J.3: history of corrections')] },
 
       { t: 'h1', text: 'Task K. No signal on site' },
       { t: 'bullets', items: [
@@ -214,7 +217,7 @@ module.exports = function aeeGuide(root, creds) {
         ['When you see damage', 'Record it on the stretch, or **Report issue** at the spot with a remark, and a photo if you can (Task C).'],
         ['When damage is fixed', 'Record it fixed on the stretch (taps restored, leakages fixed…), or **Mark resolved** on the issue (Tasks B and D).'],
         ['Concrete laid / curing done', 'Mark CC restored, curing not done / curing done, with a photo, so the Commissioner can approve.'],
-        ['Evening (2 min)', 'Menu → **Log labour** for each ward worked (Task J). Check that the top bar shows nothing "waiting to send".'],
+        ['Evening (2 min)', 'Menu → **Log labour** for each zone worked (Task J); check the day\'s entries on the **Labour** page and correct mistakes within 48 hours. Check that the top bar shows nothing "waiting to send".'],
       ] },
 
       { t: 'h1', text: '5. Problems and what to do' },
@@ -245,7 +248,7 @@ module.exports = function aeeGuide(root, creds) {
         ['Wrong item', 'Tap it → **Request deletion** → reason'],
         ['My proposals', 'Menu → **My requests** (waiting · decided · withdraw)'],
         ['Many roads', '**Select several** → tap roads → **Next: choose changes** → **Apply**'],
-        ['Labour', 'Menu → **Log labour** → date, ward, labourers, machines → **Save**'],
+        ['Labour', 'Menu → **Log labour** → date, zone, labourers, machines → **Save** · correct: **Labour** → **Edit** (48 hours)'],
         ['No signal', 'Save anyway; it sends later. Do not clear browser data.'],
       ] },
       { t: 'table', head: ['Line colour', 'Meaning'], widths: [0.3, 0.7], rows: [

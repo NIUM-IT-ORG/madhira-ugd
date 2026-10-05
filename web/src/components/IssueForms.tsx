@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
 import { ISSUE_KINDS, issueLabel } from '../../../shared/status.ts'
 import { isOverdue } from '../../../shared/stats.ts'
-import { get } from '../lib/api'
+import { del, get } from '../lib/api'
 import { canEditWard, useAuth } from '../lib/auth'
 import { submit } from '../lib/outbox'
 import { useData } from '../lib/store'
 import type { Issue, IssueEvent, Selection } from '../lib/types'
-import { Field, GpsBadge, PhotoPicker, PhotoStrip, Seg, Sheet, Stepper, fmtDateTime, timeAgo, useGps, type PendingPhoto } from './ui'
+import { Confirm, Field, GpsBadge, PhotoPicker, PhotoStrip, Seg, Sheet, Stepper, fmtDateTime, timeAgo, useGps, type PendingPhoto } from './ui'
 
 const SEVERITY = [{ v: 'low', label: 'Low' }, { v: 'medium', label: 'Medium' }, { v: 'high', label: 'High' }] as const
 const photoItems = (photos: PendingPhoto[]) =>
@@ -67,6 +67,7 @@ export function IssueDetail({ id, onClose, onSelect, toast }: { id: string; onCl
   const issue = issues.find((i) => i.id === id)
   const [events, setEvents] = useState<IssueEvent[]>([])
   const [mode, setMode] = useState<null | 'assign' | 'resolve' | 'reopen'>(null)
+  const [deleting, setDeleting] = useState(false)
   const [assignee, setAssignee] = useState('')
   const [due, setDue] = useState('')
   const [note, setNote] = useState('')
@@ -130,7 +131,20 @@ export function IssueDetail({ id, onClose, onSelect, toast }: { id: string; onCl
             {issue.status !== 'resolved' && <button className="btn" onClick={() => setMode('assign')}>Assign</button>}
             {issue.status !== 'resolved' && <button className="btn primary" onClick={() => setMode('resolve')}>Mark resolved</button>}
             {issue.status === 'resolved' && <button className="btn" onClick={() => setMode('reopen')}>Re-open</button>}
+            {user?.role === 'admin' && <button className="btn danger-outline" onClick={() => setDeleting(true)}>Delete</button>}
           </div>
+        )}
+        {deleting && (
+          <Confirm title={`Delete ${issue.code} for good?`} danger needReason confirmLabel="Delete"
+            message={issue.source === 'stretch' && issue.stretch_code
+              ? `It disappears from the map, lists, dashboard and Excel, with its photos. The damage is also cleared on road ${issue.stretch_code} (noted in its history). This cannot be undone.`
+              : 'It disappears from the map, lists, dashboard and Excel, with its photos. This cannot be undone.'}
+            onClose={() => setDeleting(false)}
+            onConfirm={async (reason) => {
+              await del(`/api/issues/${issue.id}`, { reason })
+              toast(`${issue.code} deleted.`)
+              onClose()
+            }} />
         )}
         {mode === 'assign' && (
           <div className="inline-form">

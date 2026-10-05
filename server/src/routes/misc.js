@@ -91,37 +91,5 @@ export function registerMiscRoutes(app, db) {
     const all = [...stretch, ...issue, ...cr].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, limit);
     return { activity: all };
   });
-
-  // ---- labour deployed per ward per day (one entry per ward per day; a new entry replaces the old one).
-  app.get('/api/labour', auth, async (req) => {
-    const from = isDay(req.query.from) ? req.query.from : '2000-01-01';
-    const rows = (await db.query(
-      `select l.id, to_char(l.log_date, 'YYYY-MM-DD') as log_date, l.ward, l.zone, l.labourers, l.machines, l.note, l.at, u.name as user_name
-       from labour_logs l left join users u on u.id = l.user_id where l.log_date >= $1 order by l.log_date desc, l.ward`, [from],
-    )).rows;
-    return { labour: rows };
-  });
-
-  app.post('/api/labour', auth, async (req, reply) => {
-    const body = z.object({
-      log_date: z.string().refine(isDay),
-      ward: z.number().int().min(1).max(22),
-      labourers: z.number().int().min(0).max(2000),
-      machines: z.number().int().min(0).max(200).default(0),
-      note: z.string().trim().max(500).optional().nullable(),
-    }).safeParse(req.body);
-    if (!body.success) return reply.code(400).send({ error: 'Enter date, ward and number of labourers.' });
-    const d = body.data;
-    if (!canEditWard(req.user, d.ward)) return reply.code(403).send({ error: `Ward ${d.ward} is not assigned to you.` });
-    if (d.log_date > todayIST()) return reply.code(400).send({ error: 'The date cannot be in the future.' });
-    const zone = reference.wards.find((w) => w.properties.ward === d.ward)?.properties.zone;
-    await db.query(
-      `insert into labour_logs (log_date, ward, zone, labourers, machines, note, user_id) values ($1, $2, $3, $4, $5, $6, $7)
-       on conflict (log_date, ward) do update set labourers = excluded.labourers, machines = excluded.machines, note = excluded.note,
-         user_id = excluded.user_id, at = now()`,
-      [d.log_date, d.ward, zone, d.labourers, d.machines, d.note ?? null, req.user.id],
-    );
-    publish({ entity: 'labour', action: 'update', by: req.user.name });
-    return { ok: true };
-  });
+  // Labour: see labour.js.
 }

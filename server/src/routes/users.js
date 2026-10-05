@@ -14,8 +14,20 @@ const createUserBody = z.object({
   role: z.enum(['admin', 'editor', 'viewer']),
   all_wards: z.boolean().default(false),
   wards: WARDS.default([]),
+  // Supervisor (the AEE): may correct other field staff's labour entries during their 48-hour edit window.
+  supervisor: z.boolean().default(false),
 });
-const patchUserBody = createUserBody.partial().extend({
+// Partial update: fields not sent are left alone (no defaults here, or e.g. a password reset would clear the wards).
+const patchUserBody = z.object({
+  email: createUserBody.shape.email,
+  name: createUserBody.shape.name,
+  designation: createUserBody.shape.designation,
+  phone: createUserBody.shape.phone,
+  role: createUserBody.shape.role,
+  all_wards: z.boolean(),
+  wards: WARDS,
+  supervisor: z.boolean(),
+}).partial().extend({
   active: z.boolean().optional(),
   reset_password: z.boolean().optional(),
 });
@@ -88,9 +100,9 @@ export function registerUserRoutes(app, db) {
     const pw = tempPassword();
     const d = body.data;
     const r = await db.query(
-      `insert into users (email, name, designation, phone, role, all_wards, wards, password_hash, must_change_password)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, true) returning *`,
-      [d.email, d.name, d.designation ?? null, d.phone ?? null, d.role, d.all_wards, d.wards, await hashPassword(pw)],
+      `insert into users (email, name, designation, phone, role, all_wards, wards, password_hash, must_change_password, supervisor)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, true, $9) returning *`,
+      [d.email, d.name, d.designation ?? null, d.phone ?? null, d.role, d.all_wards, d.wards, await hashPassword(pw), d.role === 'editor' && d.supervisor],
     );
     await audit(db, req, 'user_create', 'user', r.rows[0].id, { email: d.email, role: d.role });
     publish({ entity: 'user', id: r.rows[0].id, action: 'create' });
@@ -113,7 +125,7 @@ export function registerUserRoutes(app, db) {
     }
     const sets = [];
     const vals = [];
-    for (const k of ['email', 'name', 'designation', 'phone', 'role', 'all_wards', 'wards', 'active']) {
+    for (const k of ['email', 'name', 'designation', 'phone', 'role', 'all_wards', 'wards', 'active', 'supervisor']) {
       if (d[k] !== undefined) {
         vals.push(d[k]);
         sets.push(`${k} = $${vals.length}`);

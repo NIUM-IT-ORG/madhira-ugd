@@ -21,7 +21,7 @@ function StatTile({ label, value, sub, tone }: { label: string; value: string; s
   )
 }
 
-function WardReport({ row, onClose }: { row: AreaRow; onClose: () => void }) {
+function WardReport({ row, zoneLabour, onClose }: { row: AreaRow; zoneLabour: number | null; onClose: () => void }) {
   const { stretches, issues } = useData()
   const list = stretches.features.filter((f) => row.wards.includes(f.properties.ward))
   const open = issues.filter((i) => i.ward != null && row.wards.includes(i.ward) && i.status !== 'resolved')
@@ -54,7 +54,7 @@ function WardReport({ row, onClose }: { row: AreaRow; onClose: () => void }) {
           <div><span className="muted">Not motorable</span><b>{km(f.not_motorable_m)}</b></div>
           <div><span className="muted">Open issues</span><b>{row.issues_open}</b></div>
           <div><span className="muted">Taps pending</span><b>{f.taps_pending}</b></div>
-          <div><span className="muted">Avg labour / day (7 d)</span><b>{row.labour_avg_7d ?? '—'}</b></div>
+          <div><span className="muted">Zone {row.zone} labour / day (7 d)</span><b>{zoneLabour ?? '—'}</b></div>
         </div>
         <h4>Road stretches ({list.length})</h4>
         <table className="data compact">
@@ -93,7 +93,7 @@ export default function DashboardPage({ onShow }: { onShow: (s: Selection) => vo
   const [report, setReport] = useState<AreaRow | null>(null)
 
   useEffect(() => {
-    get<{ labour: LabourLike[] }>('/api/labour').then((r) => setLabour(r.labour)).catch(() => undefined)
+    get<{ entries: LabourLike[] }>('/api/labour').then((r) => setLabour(r.entries)).catch(() => undefined)
     get<{ weeks: Week[] }>('/api/stats/timeline').then((r) => setWeeks(r.weeks)).catch(() => undefined)
   }, [lastEvent?.at])
 
@@ -205,7 +205,7 @@ export default function DashboardPage({ onShow }: { onShow: (s: Selection) => vo
             <thead>
               <tr>
                 <th>Area</th><th>Sanctioned pipe</th><th>Reported</th><th>Field pipe laid</th><th>MH (rep. / field)</th><th>IC (rep. / field)</th>
-                <th>Road cut</th><th>CC restored</th><th>Approved</th><th>Open issues</th><th>Labour / day</th><th></th>
+                <th>Road cut</th><th>CC restored</th><th>Approved</th><th>Open issues</th><th title="Average labourers per day over the last 7 days, recorded per zone">Labour / day (zone)</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -233,7 +233,7 @@ export default function DashboardPage({ onShow }: { onShow: (s: Selection) => vo
           </table>
         </div>
       </section>
-      {report && <WardReport row={report} onClose={() => setReport(null)} />}
+      {report && <WardReport row={report} zoneLabour={table.zones.find((z) => z.zone.zone === report.zone)?.zone.labour_avg_7d ?? null} onClose={() => setReport(null)} />}
     </div>
   )
 }

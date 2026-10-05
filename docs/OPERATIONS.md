@@ -40,7 +40,35 @@ docker compose exec app node server/test/postdeploy-check.mjs https://<DOMAIN>
 ```
 Take a backup first (`sh deploy/backup.sh`). Roll back by checking out the previous release tag
 (`git checkout v1.0`) and running `docker compose up -d --build` again. Going back from v1.1 to v1.0 is safe:
-v1.1 only adds two tables (`storage_purges`, `request_keys`) and a status field (`water_leaks_fixed`) that v1.0 ignores.
+Each release only adds tables, columns or converted copies, so an older version still runs on a newer database (v1.2 adds `labour_entries`, `labour_entry_events`, `starting_accounts` and `users.supervisor`; v1.1 keeps reading its old `labour_logs`).
+
+## Proving an upgrade keeps every record
+
+Before upgrading the live system, rehearse on a copy (restore last night's backup on a spare server, or a copy of
+the data folder for a trial), then:
+
+```bash
+node server/test/upgrade-check.mjs snapshot https://<copy> <admin email> <password> before.json   # old version
+# upgrade the copy (git checkout <new tag>; docker compose up -d --build)
+node server/test/upgrade-check.mjs compare  https://<copy> <admin email> <password> before.json   # new version
+```
+
+It compares users, every road (status and full history), issues, requests, the network, photos and labour, and
+must end with "Upgrade kept every record". Database changes only ever add tables/columns or convert data
+(e.g. v1.2 adds up the ward labour records per zone and keeps the originals); nothing is dropped.
+
+## Starting fresh (one time, only on request)
+
+Deletes everything people have recorded and keeps the accounts and the Madhira plan (imagery, wards, zones,
+the sewer network from the drawings, progress baseline). It is never part of an upgrade.
+
+```bash
+cd /opt/madhira-ugd
+sh deploy/backup.sh                                                   # backup first
+docker compose exec app node server/scripts/reset-records.mjs         # shows what would be deleted
+docker compose exec app node server/scripts/reset-records.mjs --confirm "DELETE ALL RECORDS"
+docker compose restart app
+```
 
 ## Disk space and old data
 

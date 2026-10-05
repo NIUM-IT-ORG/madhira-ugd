@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
 import { ISSUE_KINDS, issueLabel } from '../../../shared/status.ts'
 import { isOverdue } from '../../../shared/stats.ts'
-import { timeAgo } from '../components/ui'
+import { Confirm, fmtDateTime, timeAgo } from '../components/ui'
+import { post } from '../lib/api'
+import { useAuth } from '../lib/auth'
+import { useSort } from '../lib/sort'
 import { useData } from '../lib/store'
 import type { Issue, Selection } from '../lib/types'
 
@@ -12,9 +15,21 @@ const COLUMNS: { key: Issue['status']; label: string }[] = [
 ]
 
 const ageDays = (i: Issue) => Math.floor((Date.now() - new Date(i.reported_at).getTime()) / 86400000)
+const SEV_RANK = { high: 3, medium: 2, low: 1 } as const
+const STATUS_RANK = { open: 1, assigned: 2, resolved: 3 } as const
+/** Sort columns of the table (the Excel download uses the same keys). */
+const SORT_COLUMNS: Record<string, (i: Issue) => string | number | null> = {
+  code: (i) => i.code, kind: (i) => issueLabel(i.kind), ward: (i) => i.ward, stretch: (i) => i.stretch_code,
+  severity: (i) => SEV_RANK[i.severity], status: (i) => STATUS_RANK[i.status], assigned: (i) => i.assigned_to,
+  days: (i) => (i.status === 'resolved' ? null : ageDays(i)), by: (i) => i.reported_by_name, reported: (i) => i.reported_at,
+}
 
-export default function IssuesPage({ onShow }: { onShow: (s: Selection) => void }) {
-  const { issues, geo } = useData()
+export default function IssuesPage({ onShow, toast }: { onShow: (s: Selection) => void; toast: (m: string, t?: 'ok' | 'warn' | 'bad') => void }) {
+  const { issues, geo, reload } = useData()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [kind, setKind] = useState('')
   const [zone, setZone] = useState('')
   const [ward, setWard] = useState('')
@@ -29,7 +44,10 @@ export default function IssuesPage({ onShow }: { onShow: (s: Selection) => void 
   const list = useMemo(() => issues.filter((i) =>
     (!kind || i.kind === kind) && (!zone || String(i.zone) === zone) && (!ward || String(i.ward) === ward) &&
     (!severity || i.severity === severity) && (!status || i.status === status)), [issues, kind, zone, ward, severity, status])
-  const exportUrl = '/api/export/issues.xlsx?' + new URLSearchParams(Object.entries({ kind, zone, ward, severity, status }).filter(([, v]) => v)).toString()
+  const tableRows = useMemo(() => list.filter((i) => showResolved || status === 'resolved' || i.status !== 'resolved'), [list, showResolved, status])
+  const { sorted, sortKey, sortDir, Th } = useSort(tableRows, SORT_COLUMNS, { key: 'reported', dir: 'desc' }, 'issues')
+  const exportUrl = '/api/export/issues.xlsx?' + new URLSearchParams(Object.entries({ kind, zone, ward, severity, status, sort: sortKey, dir: sortDir }).filter(([, v]) => v)).toString()
+  const toggle = (id: string) => setPicked((s) => { const x = new Set(s); if (x.has(id)) x.delete(id); else x.add(id); return x })
   const open = list.filter((i) => i.status !== 'resolved')
   const overdue = open.filter((i) => isOverdue(i.due_date))
   const byKind = ISSUE_KINDS.map((k) => ({ ...k, n: open.filter((i) => i.kind === k.key).reduce((a, i) => a + i.count, 0) })).filter((k) => k.n)
@@ -82,20 +100,50 @@ export default function IssuesPage({ onShow }: { onShow: (s: Selection) => void 
           })}
         </div>
       ) : (
+        <>
+        {isAdmin && picked.size > 0 && (
+          <div className="bulk-bar">
+            <b>{picked.size} selected</b>
+            <button className="btn small danger" onClick={() => setConfirmDelete(true)}>Delete selected…</button>
+            <button className="btn small" onClick={() => setPicked(new Set())}>Clear</button>
+          </div>
+        )}
         <div className="table-wrap">
           <table className="data">
-            <thead><tr><th>Code</th><th>Issue</th><th>Ward</th><th>Stretch</th><th>Severity</th><th>Status</th><th>Assigned</th><th>Days open</th><th>Reported by</th></tr></thead>
+            <thead>
+              <tr>
+                {isAdmin && <th><input type="checkbox" aria-label="Select all" checked={sorted.length > 0 && sorted.every((i) => picked.has(i.id))}
+                  onChange={(e) => setPicked(e.target.checked ? new Set(sorted.map((i) => i.id)) : new Set())} /></th>}
+                <Th k="code">Code</Th><Th k="kind">Issue</Th><Th k="ward">Ward</Th><Th k="stretch">Stretch</Th><Th k="severity">Severity</Th>
+                <Th k="status">Status</Th><Th k="assigned">Assigned</Th><Th k="days" num>Days open</Th><Th k="by">Reported by</Th><Th k="reported">Reported</Th>
+              </tr>
+            </thead>
             <tbody>
-              {list.filter((i) => showResolved || status === 'resolved' || i.status !== 'resolved').map((i) => (
+              {sorted.map((i) => (
                 <tr key={i.id} onClick={() => onShow({ kind: 'issue', id: i.id })} className="clickable">
+                  {isAdmin && <td onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`Select ${i.code}`} checked={picked.has(i.id)} onChange={() => toggle(i.id)} /></td>}
                   <td>{i.code}</td><td>{issueLabel(i.kind)}{i.count > 1 ? ` × ${i.count}` : ''}</td><td>{i.ward ?? '—'}</td><td>{i.stretch_code ?? '—'}</td>
                   <td><span className={`chip ${i.severity === 'high' ? 'bad' : i.severity === 'medium' ? 'warn' : 'neutral'}`}>{i.severity}</span></td>
                   <td>{i.status}</td><td>{i.assigned_to ?? '—'}</td><td className="num">{i.status === 'resolved' ? '—' : ageDays(i)}</td><td>{i.reported_by_name ?? '—'}</td>
+                  <td>{fmtDateTime(i.reported_at)}</td>
                 </tr>
               ))}
+              {!sorted.length && <tr><td colSpan={isAdmin ? 11 : 10} className="muted">No issues match.</td></tr>}
             </tbody>
           </table>
         </div>
+        </>
+      )}
+      {confirmDelete && (
+        <Confirm title={`Delete ${picked.size} issue${picked.size > 1 ? 's' : ''} for good?`} danger needReason confirmLabel="Delete"
+          message="They disappear from the map, lists, dashboard and Excel, with their photos. Damage recorded on a road is cleared there too (noted in the road's history). This cannot be undone."
+          onClose={() => setConfirmDelete(false)}
+          onConfirm={async (reason) => {
+            const r = await post<{ deleted: string[] }>('/api/issues/delete', { ids: [...picked], reason })
+            setPicked(new Set())
+            toast(`${r.deleted.length} issue${r.deleted.length > 1 ? 's' : ''} deleted.`)
+            reload('issues', 'stretches').catch(() => undefined)
+          }} />
       )}
     </div>
   )

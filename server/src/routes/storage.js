@@ -18,7 +18,7 @@ export const CATEGORIES = [
   { key: 'resolved_issues', label: 'Resolved issues', hint: 'Issues resolved before the date, with their history.' },
   { key: 'requests', label: 'Decided change requests', hint: 'Approved, rejected and withdrawn requests. Approved changes stay on the map.' },
   { key: 'removed_stretches', label: 'Deleted and rejected stretches', hint: 'Stretches deleted or rejected before the date, with their history and resolved issues. Open issues on them are kept.' },
-  { key: 'labour', label: 'Labour entries', hint: 'Daily labour and machine figures before the date.' },
+  { key: 'labour', label: 'Labour entries', hint: 'Daily labour and machine figures (per zone) before the date, with their change history.' },
   { key: 'audit', label: 'Sign-in and admin log', hint: 'Sign-ins, password changes and user changes.' },
   { key: 'cleanup_log', label: 'Clean-up log', hint: 'Earlier entries of this page\'s own log. A new entry is always written for this clean-up.' },
 ];
@@ -103,8 +103,13 @@ async function runPurge(q, cats, before) {
     summary.requests = { rows: cr.length, bytes: 0 };
   }
   if (has('labour')) {
-    const l = (await q.query('delete from labour_logs where log_date < $1::date returning *', [before])).rows;
+    const ev = (await q.query('delete from labour_entry_events where entry_id in (select id from labour_entries where log_date < $1::date) returning *', [before])).rows;
+    const l = (await q.query('delete from labour_entries where log_date < $1::date returning *', [before])).rows;
+    // The ward-based records of v1.0 and v1.1 (kept when v1.2 converted them to zones) go with them.
+    const old = (await q.query('delete from labour_logs where log_date < $1::date returning *', [before])).rows;
     rows.labour = l;
+    rows['labour.history'] = ev;
+    if (old.length) rows['labour.by_ward_before_v1_2'] = old;
     summary.labour = { rows: l.length, bytes: 0 };
   }
   if (has('audit')) {
@@ -216,7 +221,7 @@ export function registerStorageRoutes(app, db) {
       issues: await count('select count(*)::int as n from issues'),
       issue_history: await count('select count(*)::int as n from issue_events'),
       requests: await count('select count(*)::int as n from change_requests'),
-      labour: await count('select count(*)::int as n from labour_logs'),
+      labour: await count('select count(*)::int as n from labour_entries'),
       audit: await count('select count(*)::int as n from audit_log'),
     };
     let disk = null;

@@ -1,5 +1,8 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import { z } from 'zod';
 import { ISSUE_KINDS, normaliseStatus } from '../../../shared/status.ts';
+import { config } from '../config.js';
 import { canEditWard } from '../auth.js';
 import { nextCounter } from '../db.js';
 import { publish } from '../events.js';
@@ -53,8 +56,72 @@ const SELECT = `
   from issues i left join stretches s on s.id = i.stretch_id left join users ru on ru.id = i.reported_by
   left join users xu on xu.id = i.resolved_by left join users uu on uu.id = i.updated_by`;
 
+/**
+ * Delete issues for good (Commissioner). An issue raised from a road's status also clears that damage on the road
+ * (recorded in the road's history), or the road's next save would raise it again. Photos used only by the deleted
+ * issues are removed too. Returns the photo files to remove after the transaction commits.
+ */
+async function deleteIssues(q, user, ids, reason, req) {
+  const files = [];
+  const stretches = new Set();
+  const gone = [];
+  for (const id of ids) {
+    const i = (await q.query('select * from issues where id = $1 for update', [id])).rows[0];
+    if (!i) continue;
+    await q.query('delete from issue_events where issue_id = $1', [i.id]);
+    await q.query('delete from issues where id = $1', [i.id]);
+    gone.push(i.code);
+    if (i.stretch_id) {
+      stretches.add(i.stretch_id);
+      if (i.source === 'stretch' && i.status !== 'resolved' && CLEARS[i.kind]) {
+        const s = (await q.query('select * from stretches where id = $1 and deleted_at is null for update', [i.stretch_id])).rows[0];
+        if (s) {
+          await applyUpdate(q, { ...user, role: 'admin' }, s, {
+            changes: CLEARS[i.kind](normaliseStatus(s.status)), photos: [], note: `Issue ${i.code} deleted by the Commissioner: ${reason}`, kind: 'issue_deleted',
+          }).catch((e) => { if (!(e?.body?.error === 'Nothing changed.')) throw e });
+        }
+      }
+    }
+    if (i.photos?.length) {
+      const freed = (await q.query(
+        `delete from photos p where p.id::text = any($1::text[])
+           and not exists (select 1 from stretch_versions v where p.id::text = any(v.photos))
+           and not exists (select 1 from issues x where p.id::text = any(x.photos))
+         returning path`, [i.photos],
+      )).rows;
+      files.push(...freed.map((r) => r.path));
+    }
+    await q.query(
+      'insert into audit_log (user_id, action, entity, entity_id, detail, ip) values ($1, $2, $3, $4, $5, $6)',
+      [user.id, 'issue_delete', 'issue', i.code, JSON.stringify({ kind: i.kind, ward: i.ward, status: i.status, description: i.description, reason }), req.ip],
+    );
+  }
+  for (const sid of stretches) {
+    await q.query("update stretches set open_issues = (select count(*) from issues where stretch_id = $1 and status <> 'resolved') where id = $1", [sid]);
+  }
+  return { files, gone, stretches: [...stretches] };
+}
+
 export function registerIssueRoutes(app, db) {
   const auth = { preHandler: app.authenticate };
+  const admin = { preHandler: app.requireRole('admin') };
+
+  // Commissioner: delete one or several issues for good (a reason is required and logged).
+  const deleteBody = z.object({
+    ids: z.array(z.string().uuid()).min(1).max(500),
+    reason: z.string({ error: 'Give a reason for deleting.' }).trim().min(1, 'Give a reason for deleting.').max(1000),
+  });
+  const runDelete = async (req, reply, ids) => {
+    const b = deleteBody.safeParse({ ...(req.body ?? {}), ids });
+    if (!b.success) return reply.code(400).send({ error: b.error.issues.map((i) => i.message).join('; ') });
+    const out = await db.tx((q) => deleteIssues(q, req.user, b.data.ids, b.data.reason, req));
+    for (const f of out.files) fs.rmSync(path.join(config.uploadDir, f), { force: true });
+    publish({ entity: 'issue', action: 'delete', by: req.user.name });
+    if (out.stretches.length) publish({ entity: 'stretch', action: 'update', by: req.user.name });
+    return { deleted: out.gone };
+  };
+  app.delete('/api/issues/:id', admin, (req, reply) => runDelete(req, reply, [req.params.id]));
+  app.post('/api/issues/delete', admin, (req, reply) => runDelete(req, reply, req.body?.ids ?? []));
 
   app.get('/api/issues', auth, async () => ({ issues: (await db.query(`${SELECT} order by i.reported_at desc`)).rows }));
 

@@ -1,7 +1,7 @@
-# Madhira UGD Tracker — release v1.1
+# Madhira UGD Tracker — release v1.2
 
 Web app for tracking the Underground Drainage scheme of Madhira Municipality: a satellite map of the
-sewer network road by road, field updates from the AEE and Field Inspector, approvals and progress
+sewer network road by road, field updates from the AEE, Field Inspector and contracting assistants, approvals and progress
 dashboards for the Commissioner.
 
 **This folder is everything needed to deploy and run it**: source code, the container recipe, all map data
@@ -15,7 +15,7 @@ the documentation. Nothing else has to be downloaded except public software pack
 | IT team deploying on AWS | `docs/DEPLOY-AWS.docx` (Git repository + one EC2 server, step by step) |
 | IT team deploying elsewhere | `docs/DEPLOY-GENERIC.md` (any Linux server or cloud with Docker) |
 | Commissioner | `docs/user-guides/Commissioner-Guide.docx` |
-| AEE and Field Inspector | `docs/user-guides/AEE-and-Field-Inspector-Guide.docx` |
+| AEE, Field Inspector, contracting assistants | `docs/user-guides/AEE-and-Field-Inspector-Guide.docx` |
 | AEE, every task tap by tap | `docs/user-guides/AEE-Step-by-Step-Guide.docx` (also `.pdf` for the phone) |
 | Developers / GIS staff | `docs/ARCHITECTURE.md`, `docs/DATA-DICTIONARY.md`, `docs/IMAGERY-AND-GEOREFERENCING.md`, `docs/API.md` |
 | Running it day to day | `docs/OPERATIONS.md`, `docs/UAT-CHECKLIST.md` |
@@ -44,16 +44,17 @@ docker compose exec app node server/test/postdeploy-check.mjs https://<DOMAIN>
 
 ## Accounts
 
-Three accounts are created on the first start, from `deploy/initial-users.json` (passwords stored only as
-bcrypt hashes): **Commissioner** (admin), **AEE** and **Field Inspector** (editors, all 22 wards). Their
+Six accounts are created from `deploy/initial-users.json` (passwords stored only as bcrypt hashes):
+**Commissioner** (admin), **AEE** (editor and supervisor), **Field Inspector** and **Contracting Assistants 1–3**
+(editors), all for the 22 wards. Each is created once; upgrading an earlier release adds only the new ones. Their
 one-time passwords are printed in the user guides; each must be changed at first sign-in, after which the
-printed password no longer works. Treat this package as confidential until all three have signed in.
+printed password no longer works. Treat this package as confidential until all of them have signed in.
 
 ## Handover checklist
 
 - [ ] Package checksum verified (`SHA256SUMS.txt`)
-- [ ] Folder committed and pushed to the municipality's private Git repository; tag `v1.1` (deployment guide, Part A; upgrading from v1.0: part B14)
+- [ ] Folder committed and pushed to the municipality's private Git repository; tag `v1.2` (deployment guide, Part A; upgrading an earlier release: part B14)
 - [ ] Site live on HTTPS; post-deploy check passes
-- [ ] Commissioner, AEE and Field Inspector have signed in and set their own passwords
+- [ ] Commissioner, AEE, Field Inspector and the three contracting assistants have signed in and set their own passwords
 - [ ] Nightly backups and disk snapshots running; one restore tested
 - [ ] Acceptance checklist (`docs/UAT-CHECKLIST.md`) signed off

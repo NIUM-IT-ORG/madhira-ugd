@@ -18,6 +18,7 @@ import { registerNetworkRoutes } from './routes/network.js';
 import { registerMiscRoutes } from './routes/misc.js';
 import { registerReportRoutes } from './routes/reports.js';
 import { registerStorageRoutes } from './routes/storage.js';
+import { registerLabourRoutes } from './routes/labour.js';
 
 const app = Fastify({
   logger: { level: process.env.LOG_LEVEL ?? 'info' },
@@ -89,6 +90,7 @@ registerNetworkRoutes(app, db);
 registerMiscRoutes(app, db);
 registerReportRoutes(app, db);
 registerStorageRoutes(app, db);
+registerLabourRoutes(app, db);
 
 // Bad input must never look like a server failure: map validation and database input errors to 4xx.
 const PG_INPUT = {

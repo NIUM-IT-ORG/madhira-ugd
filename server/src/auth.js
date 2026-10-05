@@ -25,7 +25,7 @@ export function passwordProblem(pw) {
 export function publicUser(u) {
   return {
     id: u.id, email: u.email, name: u.name, designation: u.designation, phone: u.phone, role: u.role,
-    all_wards: u.all_wards, wards: u.wards, active: u.active, must_change_password: u.must_change_password,
+    all_wards: u.all_wards, wards: u.wards, active: u.active, must_change_password: u.must_change_password, supervisor: !!u.supervisor,
     created_at: u.created_at, last_login_at: u.last_login_at,
   };
 }

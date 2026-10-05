@@ -5,8 +5,8 @@ const ROOT = path.resolve(__dirname, '..', '..');
 // One-time passwords printed in the user guides (kept out of Git: var/ is ignored).
 const creds = JSON.parse(fs.readFileSync(process.env.CREDENTIALS_FILE ?? path.join(ROOT, 'var', 'release-credentials.json'), 'utf8'));
 const info = {
-  version: 'v1.1',
-  date: '3 October 2026',
+  version: 'v1.2',
+  date: '6 October 2026',
   zipMb: process.env.ZIP_MB ?? '≈130',
   processedMb: process.env.PROCESSED_MB ?? '35',
   rawMb: process.env.RAW_MB ?? '91',

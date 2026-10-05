@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ISSUE_KINDS } from '../../../shared/status.ts';
+import { ISSUE_KINDS, normaliseStatus } from '../../../shared/status.ts';
 import { canEditWard } from '../auth.js';
 import { nextCounter } from '../db.js';
 import { publish } from '../events.js';
@@ -14,8 +14,8 @@ const createBody = z.object({
   stretch_id: z.string().uuid().optional().nullable(),
   count: z.number().int().min(1).max(1000).default(1),
   severity: z.enum(['low', 'medium', 'high']).optional(),
-  description: z.string().trim().max(2000).optional().nullable(),
-  photos: z.array(z.string().uuid()).min(1, 'Attach at least one photo.').max(10),
+  description: z.string({ error: 'Write a remark describing the problem.' }).trim().min(1, 'Write a remark describing the problem.').max(2000),
+  photos: z.array(z.string().uuid()).max(10).default([]),
 });
 const patchBody = z.object({
   status: z.enum(['open', 'assigned', 'resolved']).optional(),
@@ -29,7 +29,7 @@ const patchBody = z.object({
 /** Status change on the stretch that clears an issue raised from it. */
 const CLEARS = {
   taps_broken: (s) => [{ path: 'utilities.taps_restored', to: s.utilities.taps_broken }],
-  water_leak: () => [{ path: 'utilities.water_leaks', to: 0 }],
+  water_leak: (s) => [{ path: 'utilities.water_leaks_fixed', to: s.utilities.water_leaks }],
   drain_clogged: () => [{ path: 'utilities.drain_clogged', to: false }],
   water_stagnation: () => [{ path: 'hazards.water_stagnation', to: false }],
   potholes: () => [{ path: 'hazards.potholes', to: 0 }],
@@ -37,8 +37,19 @@ const CLEARS = {
   not_motorable: () => [{ path: 'motorable', to: 'yes' }],
 };
 
+/** Status change on the stretch that brings back an issue re-opened by hand (n = the issue's count). */
+const REOPENS = {
+  taps_broken: (s, n) => { const b = Math.max(s.utilities.taps_broken, n); return [{ path: 'utilities.taps_broken', to: b }, { path: 'utilities.taps_restored', to: b - n }] },
+  water_leak: (s, n) => { const l = Math.max(s.utilities.water_leaks, n); return [{ path: 'utilities.water_leaks', to: l }, { path: 'utilities.water_leaks_fixed', to: l - n }] },
+  drain_clogged: () => [{ path: 'utilities.drain_clogged', to: true }],
+  water_stagnation: () => [{ path: 'hazards.water_stagnation', to: true }],
+  potholes: (s, n) => [{ path: 'hazards.potholes', to: Math.max(s.hazards.potholes, n) }],
+  uneven_backfill: () => [{ path: 'hazards.uneven_backfill', to: true }],
+  not_motorable: () => [{ path: 'motorable', to: 'no' }],
+};
+
 const SELECT = `
-  select i.*, s.code as stretch_code, s.name as stretch_name, ru.name as reported_by_name, xu.name as resolved_by_name, uu.name as updated_by_name
+  select i.*, to_char(i.due_date, 'YYYY-MM-DD') as due_date, s.code as stretch_code, s.name as stretch_name, ru.name as reported_by_name, xu.name as resolved_by_name, uu.name as updated_by_name
   from issues i left join stretches s on s.id = i.stretch_id left join users ru on ru.id = i.reported_by
   left join users xu on xu.id = i.resolved_by left join users uu on uu.id = i.updated_by`;
 
@@ -126,6 +137,18 @@ export function registerIssueRoutes(app, db) {
           if (s) {
             await applyUpdate(q, { ...req.user, role: 'admin' }, s, {
               changes: CLEARS[i.kind](s.status), photos: d.photos, note: `Issue ${i.code} resolved: ${d.note}`, kind: 'issue_resolved',
+            }).catch((e) => {
+              if (!(e?.body?.error === 'Nothing changed.')) throw e;
+            });
+          }
+        }
+        // Re-opening it brings the damage back on the stretch too; otherwise the next save of the stretch
+        // would close the issue again.
+        if (d.status === 'open' && i.status === 'resolved' && i.source === 'stretch' && i.stretch_id && REOPENS[i.kind]) {
+          const s = (await q.query('select * from stretches where id = $1 and deleted_at is null for update', [i.stretch_id])).rows[0];
+          if (s) {
+            await applyUpdate(q, { ...req.user, role: 'admin' }, s, {
+              changes: REOPENS[i.kind](normaliseStatus(s.status), i.count), photos: d.photos, note: `Issue ${i.code} re-opened: ${d.note ?? ''}`.trim(), kind: 'issue_reopened',
             }).catch((e) => {
               if (!(e?.body?.error === 'Nothing changed.')) throw e;
             });

@@ -20,11 +20,12 @@ export async function bootstrapAdmin(db, log) {
     for (const u of users) {
       await db.query(
         `insert into users (email, name, designation, role, all_wards, wards, password_hash, must_change_password)
-         values ($1, $2, $3, $4, $5, $6, $7, true)`,
-        [u.email.toLowerCase(), u.name, u.designation ?? null, u.role, !!u.all_wards, u.wards ?? [], u.password_hash],
+         values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+        // Release accounts must change their one-time password; a local trial file may set false.
+        [u.email.toLowerCase(), u.name, u.designation ?? null, u.role, !!u.all_wards, u.wards ?? [], u.password_hash, u.must_change_password !== false],
       );
     }
-    log.warn(`Created ${users.length} starting accounts from ${config.initialUsersFile} (one-time passwords; change at first sign-in)`);
+    log.warn(`Created ${users.length} starting accounts from ${config.initialUsersFile}`);
     return;
   }
 

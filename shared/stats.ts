@@ -14,6 +14,11 @@ export interface StretchLike {
   open_issues: number
   record_state?: string
 }
+/** Today's date in India time, as YYYY-MM-DD. */
+export const todayIST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+/** An issue is overdue from the day after its due date (India time). */
+export const isOverdue = (due: string | null | undefined) => !!due && String(due).slice(0, 10) < todayIST()
+
 export interface IssueLike { ward: number | null; zone: number | null; status: string; severity: string; count: number; kind: string; reported_at: string; due_date?: string | null }
 export interface BaselineGroupLike {
   zone: number
@@ -73,7 +78,7 @@ export function addStretch(f: FieldFigures, st: StretchLike) {
   if (s.motorable === 'no') f.not_motorable_m += L
   if (s.motorable === 'difficult') f.difficult_m += L
   f.taps_pending += Math.max(0, s.utilities.taps_broken - s.utilities.taps_restored)
-  f.water_leaks += s.utilities.water_leaks
+  f.water_leaks += Math.max(0, s.utilities.water_leaks - s.utilities.water_leaks_fixed)
   f.drains_clogged += s.utilities.drain_clogged ? 1 : 0
   f.stagnation += s.hazards.water_stagnation ? 1 : 0
   f.potholes += s.hazards.potholes
@@ -140,7 +145,7 @@ export function progressTable(
     if (i === undefined) continue
     rows[i].issues_open++
     if (it.severity === 'high') rows[i].issues_high++
-    if (it.due_date && new Date(it.due_date) < today) rows[i].issues_overdue++
+    if (isOverdue(it.due_date)) rows[i].issues_overdue++
   }
   const combine = (key: string, label: string, zone: number, list: AreaRow[]): AreaRow => {
     const f = emptyField()

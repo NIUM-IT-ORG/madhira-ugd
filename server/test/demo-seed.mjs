@@ -64,7 +64,7 @@ const admin = client();
 const aee = client();
 await admin('POST', '/api/auth/login', { email: creds.admin.email, password: creds.admin.password });
 
-let demo = creds.demo_aee;
+let demo = process.env.SEED_AEE_EMAIL ? { email: process.env.SEED_AEE_EMAIL, password: process.env.SEED_AEE_PASSWORD } : creds.demo_aee;
 if (!demo) {
   const r = await admin('POST', '/api/users', { email: 'demo.aee@madhira.local', name: 'Demo AEE', designation: 'AEE (demo)', role: 'editor', all_wards: true });
   const pw = `Demo-${Math.random().toString(36).slice(2, 10)}`;

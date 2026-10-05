@@ -22,7 +22,12 @@ export function registerEvents(app) {
     });
     reply.raw.write(`retry: 5000\n\n`);
     const send = (e) => reply.raw.write(`data: ${JSON.stringify(e)}\n\n`);
-    const ping = setInterval(() => reply.raw.write(': ping\n\n'), 25000);
+    // Each ping re-checks the session, so a disabled or signed-out user stops receiving updates.
+    const ping = setInterval(async () => {
+      const u = await app.sessionUser(req).catch(() => null);
+      if (!u) return reply.raw.end();
+      reply.raw.write(': ping\n\n');
+    }, 25000);
     bus.on('change', send);
     req.raw.on('close', () => {
       clearInterval(ping);

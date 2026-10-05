@@ -17,6 +17,8 @@ const creds = process.env.SMOKE_EMAIL
   ? { email: process.env.SMOKE_EMAIL, password: process.env.SMOKE_PASSWORD }
   : JSON.parse(fs.readFileSync(path.join(root, 'var', 'first-admin.json'), 'utf8'));
 const pipes = JSON.parse(fs.readFileSync(path.join(root, 'data', 'processed', 'pipes.geojson'), 'utf8')).features;
+const wards = JSON.parse(fs.readFileSync(path.join(root, 'data', 'processed', 'wards.geojson'), 'utf8')).features;
+const { midpoint, wardAt } = await import('../../shared/geo.ts');
 
 let failures = 0;
 const ok = (cond, msg) => {
@@ -26,8 +28,8 @@ const ok = (cond, msg) => {
 
 function client() {
   let cookie = '';
-  async function call(method, url, body, { raw } = {}) {
-    const headers = { 'x-ugd': '1', cookie };
+  async function call(method, url, body, { raw, headers: extra } = {}) {
+    const headers = { 'x-ugd': '1', cookie, ...(extra ?? {}) };
     let payload;
     if (body instanceof FormData) payload = body;
     else if (body !== undefined) {
@@ -207,6 +209,159 @@ ok((await aee.post('/api/labour', { log_date: '2026-10-01', ward: 5, labourers: 
 const act = await viewer.get('/api/activity?limit=20');
 ok(act.status === 200 && act.activity.length > 5, `viewer sees activity feed (${act.activity.length} items)`);
 ok((await viewer.patch(`/api/issues/${taps.id}`, { status: 'open', note: 'x' })).status === 403, 'viewer cannot change issues');
+
+// ---- v1.1: pipes outside the ward outlines can be recorded (nearest ward)
+const outside = pipes.find((p) => !wardAt(midpoint(p.geometry), wards).inside && !wardAt(midpoint(p.geometry), wards).inside);
+const near = wardAt(midpoint(outside.geometry), wards);
+const so = await admin.post('/api/stretches', { name: 'Test outside road', geometry: { type: 'MultiLineString', coordinates: [outside.geometry.coordinates] }, pipe_ids: [outside.properties.id] });
+if (so.status !== 200) console.log('DEBUG so', JSON.stringify(so));
+ok(so.status === 200, `stretch on a pipe outside the ward outlines is accepted (${outside.properties.id})`);
+let od = await admin.get(`/api/stretches/${so.id}`);
+ok(od.stretch.properties.ward === near.ward && od.stretch.properties.outside_ward === true, `it goes to the nearest ward ${near.ward}, flagged outside`);
+
+// ---- v1.1: water pipe leaks can be marked fixed; damage photos are optional
+let ov = od.stretch.properties.version;
+const l1 = await admin.patch(`/api/stretches/${so.id}`, { base_version: ov, changes: [{ path: 'utilities.water_leaks', to: 2 }] });
+ok(l1.status === 200, 'damage (2 leaks) recorded without a photo');
+od = await admin.get(`/api/stretches/${so.id}`);
+ok(od.issues.find((i) => i.kind === 'water_leak' && i.status !== 'resolved')?.count === 2, 'leak issue raised with count 2');
+ok((await admin.patch(`/api/stretches/${so.id}`, { base_version: l1.version, changes: [{ path: 'utilities.water_leaks_fixed', to: 3 }] })).status === 400, 'more leaks fixed than reported is refused');
+const l2 = await admin.patch(`/api/stretches/${so.id}`, { base_version: l1.version, changes: [{ path: 'utilities.water_leaks_fixed', to: 1 }] });
+od = await admin.get(`/api/stretches/${so.id}`);
+ok(l2.status === 200 && od.issues.find((i) => i.kind === 'water_leak' && i.status !== 'resolved')?.count === 1, '1 of 2 leaks fixed: issue count 1');
+await admin.patch(`/api/stretches/${so.id}`, { base_version: l2.version, changes: [{ path: 'utilities.water_leaks_fixed', to: 2 }] });
+od = await admin.get(`/api/stretches/${so.id}`);
+ok(!od.issues.some((i) => i.kind === 'water_leak' && i.status !== 'resolved') && od.stretch.properties.open_issues === 0, 'all leaks fixed: issue resolved');
+
+// ---- v1.1: report issue needs a remark, photo optional
+const loc = chainA.geometry.coordinates[0];
+ok((await aee.post('/api/issues', { kind: 'other', location: loc })).status === 400, 'issue without a remark is refused');
+const ni = await aee.post('/api/issues', { kind: 'other', location: loc, description: 'Test remark, no photo' });
+ok(ni.status === 200, 'issue with a remark and no photo is accepted');
+const xl = await admin.call('GET', '/api/export/issues.xlsx?ward=10&status=open', undefined, { raw: true });
+ok(xl.status === 200 && /spreadsheet/.test(xl.headers.get('content-type')), 'filtered issues Excel downloads');
+
+// ---- v1.1: storage page (Commissioner only)
+ok((await aee.get('/api/admin/storage')).status === 403, 'AEE cannot open the storage page');
+const sto = await admin.get('/api/admin/storage');
+ok(sto.status === 200 && sto.categories.length === 8 && sto.rows.history > 0, `storage usage (${sto.rows.history} history rows, ${sto.photos.count} photos)`);
+const tomorrow = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+const all = sto.categories.map((c) => c.key);
+const pv = await admin.post('/api/admin/storage/preview', { categories: all, before: tomorrow });
+ok(pv.status === 200 && pv.summary.history.rows > 0 && pv.summary.removed_stretches.rows >= 1, `preview: ${pv.summary.history.rows} history rows, ${pv.summary.removed_stretches.rows} removed stretches`);
+ok((await admin.get('/api/admin/storage')).rows.history === sto.rows.history, 'preview deletes nothing');
+const zip = await admin.call('GET', `/api/admin/storage/archive?categories=${all.join(',')}&before=${tomorrow}`, undefined, { raw: true });
+const zb = Buffer.from(await zip.arrayBuffer());
+ok(zip.status === 200 && zb.subarray(0, 2).toString() === 'PK' && zb.length > 1000, `archive downloads (${Math.round(zb.length / 1024)} KB zip)`);
+ok((await admin.post('/api/admin/storage/purge', { categories: ['removed_stretches'], before: tomorrow })).status === 400, 'clean-up needs typed DELETE');
+const pg = await admin.post('/api/admin/storage/purge', { categories: ['removed_stretches', 'cleanup_log'], before: tomorrow, confirm: 'DELETE' });
+ok(pg.status === 200 && pg.summary.removed_stretches.rows >= 1, 'deleted stretches are purged');
+ok((await admin.get(`/api/stretches/${st.id}`)).status === 404, 'the deleted test stretch is gone for good');
+ok((await admin.get('/api/admin/storage')).purges.length === 1, 'the clean-up is recorded in the log');
+
+// ---- v1.1 fixes: stale edits after a resolve or a history clean-up get a clear 409; open issues survive a purge
+od = await admin.get(`/api/stretches/${so.id}`);
+const vBase = od.stretch.properties.version;
+const s2 = await admin.patch(`/api/stretches/${so.id}`, { base_version: vBase, changes: [{ path: "utilities.water_leaks", to: 3 }] });
+const leakIssue = (await admin.get(`/api/stretches/${so.id}`)).issues.find((i) => i.kind === 'water_leak' && i.status !== 'resolved');
+ok((await admin.patch(`/api/issues/${leakIssue.id}`, { status: 'resolved', note: 'Plumber fixed all 3' })).status === 200, 'Commissioner resolves the leak issue (leaks fixed = 3)');
+const stale = await admin.patch(`/api/stretches/${so.id}`, { base_version: s2.version, changes: [{ path: 'utilities.water_leaks', to: 1 }] });
+ok(stale.status === 409, `stale leak edit after the resolve is a conflict, not a 400 (${stale.status})`);
+const manual = await admin.post('/api/issues', { kind: 'other', location: outside.geometry.coordinates[0], stretch_id: so.id, description: 'Test manual issue on the stretch' });
+ok(manual.status === 200, 'manual issue reported on the stretch');
+const before = (await admin.get(`/api/stretches/${so.id}`)).stretch.properties.version;
+const hp = await admin.post('/api/admin/storage/purge', { categories: ['history'], before: tomorrow, confirm: 'DELETE' });
+ok(hp.status === 200, `history purged (${hp.summary?.history?.rows} entries)`);
+const afterPurge = await admin.get(`/api/stretches/${so.id}`);
+ok(afterPurge.versions.length >= 1 && afterPurge.versions[0].version === before, 'the latest version is kept');
+const stale2 = await admin.patch(`/api/stretches/${so.id}`, { base_version: 1, changes: [{ path: 'excavation.stage', to: 'road_cut' }] });
+ok(stale2.status === 409, `edit based on purged history is a conflict (${stale2.status})`);
+const tl = await admin.get('/api/stats/timeline');
+ok(tl.status === 200 && tl.weeks.length > 0, 'dashboard timeline still works after the purge');
+await admin.del(`/api/stretches/${so.id}`, { reason: 'Test cleanup' });
+const rp = await admin.post('/api/admin/storage/purge', { categories: ['removed_stretches'], before: tomorrow, confirm: 'DELETE' });
+ok(rp.status === 200 && rp.summary.removed_stretches.rows >= 1, `removed stretches purged (${rp.summary?.removed_stretches?.detail})`);
+const kept = (await admin.get('/api/issues')).issues.find((i) => i.id === manual.id);
+ok(!!kept && kept.status !== 'resolved' && !kept.stretch_id, 'the open manual issue survives, unlinked from the deleted road');
+
+// ---- bug-fix regressions (v1.1 review)
+const free = w10.filter((p) => p !== chainA && p !== chainB);
+const one = (p) => ({ type: 'MultiLineString', coordinates: [p.geometry.coordinates] });
+// shared pipes are refused
+const sp1 = await admin.post('/api/stretches', { geometry: one(free[0]), pipe_ids: [free[0].properties.id] });
+const sp2 = await admin.post('/api/stretches', { geometry: one(free[0]), pipe_ids: [free[0].properties.id] });
+ok(sp1.status === 200 && sp2.status === 409, `a pipe cannot be in two stretches (${sp2.status})`);
+// rejected restoration can be resubmitted; a redraw needs approving again
+const ph3 = await uploadPhoto(admin);
+const rs = await admin.patch(`/api/stretches/${sp1.id}`, { base_version: 1, photos: [ph3.id], changes: [{ path: 'restoration.stage', to: 'restored_curing_done' }] });
+ok((await admin.post(`/api/stretches/${sp1.id}/reject`, { note: 'Cracks' })).status === 200, 'restoration rejected');
+const ph4 = await uploadPhoto(admin);
+const rs2 = await admin.patch(`/api/stretches/${sp1.id}`, { base_version: rs.version + 1, photos: [ph4.id], note: 'Relaid' });
+let d1 = await admin.get(`/api/stretches/${sp1.id}`);
+ok(rs2.status === 200 && d1.stretch.properties.approval === 'pending', `resubmitted with a new photo goes back for approval (${d1.stretch.properties.approval})`);
+ok((await admin.post(`/api/stretches/${sp1.id}/approve`)).status === 200, 'approved');
+d1 = await admin.get(`/api/stretches/${sp1.id}`);
+const rd = await admin.patch(`/api/stretches/${sp1.id}`, { base_version: d1.stretch.properties.version, geometry: one(free[1]), pipe_ids: [free[1].properties.id] });
+d1 = await admin.get(`/api/stretches/${sp1.id}`);
+ok(rd.status === 200 && d1.stretch.properties.approval === 'pending', `redrawn approved stretch needs approving again (${d1.stretch.properties.approval})`);
+const staleR = await admin.patch(`/api/stretches/${sp1.id}`, { base_version: d1.stretch.properties.version - 1, changes: [{ path: 'restoration.stage', to: 'pending' }] });
+await admin.post(`/api/stretches/${sp1.id}/approve`);
+const staleA = await admin.patch(`/api/stretches/${sp1.id}`, { base_version: d1.stretch.properties.version, changes: [{ path: 'restoration.stage', to: 'pending' }] });
+ok(staleA.status === 409, `a stale restoration edit after an approval is a conflict (${staleA.status}, earlier ${staleR.status})`);
+// re-opened issue stays open after an unrelated edit
+d1 = await admin.get(`/api/stretches/${sp1.id}`);
+const ph5 = await admin.patch(`/api/stretches/${sp1.id}`, { base_version: d1.stretch.properties.version, changes: [{ path: 'hazards.potholes', to: 2 }] });
+d1 = await admin.get(`/api/stretches/${sp1.id}`);
+const pot = d1.issues.find((i) => i.kind === 'potholes' && i.status !== 'resolved');
+await admin.patch(`/api/issues/${pot.id}`, { status: 'resolved', note: 'Filled' });
+ok((await admin.patch(`/api/issues/${pot.id}`, { status: 'open', note: 'Sank again' })).status === 200, 'issue re-opened');
+d1 = await admin.get(`/api/stretches/${sp1.id}`);
+ok(d1.stretch.properties.status.hazards.potholes === 2, 'the potholes are back on the stretch');
+await admin.patch(`/api/stretches/${sp1.id}`, { base_version: d1.stretch.properties.version, changes: [{ path: 'sewer.ics_built', to: 1 }] });
+ok((await admin.get(`/api/issues/${pot.id}`)).issue.status === 'open', 'an unrelated edit does not close the re-opened issue');
+// a rejected proposed stretch closes its issues
+const prop = await aee.post('/api/stretches', { geometry: one(free[2]), pipe_ids: [free[2].properties.id], status: { utilities: { drain_clogged: true } } });
+const pcr = (await admin.get('/api/change-requests?status=pending')).requests.find((r) => r.target_id === prop.id);
+await admin.post(`/api/change-requests/${pcr.id}/reject`, { note: 'Not our road' });
+const pis = (await admin.get('/api/issues')).issues.filter((i) => i.stretch_id === prop.id);
+ok(pis.length >= 1 && pis.every((i) => i.status === 'resolved'), 'rejecting a proposed stretch closes its issues');
+// pipes: no duplicates; pipe requests close with their rejected manhole; bulk checks photos
+const dup = await aee.post('/api/change-requests', { entity: 'pipe', action: 'add', reason: 'dup', payload: { from: free[3].properties.from, to: free[3].properties.to, dia_mm: 150 } });
+ok(dup.status === 409, `a second pipe between the same manholes is refused (${dup.status})`);
+const mh2 = await aee.post('/api/change-requests', { entity: 'manhole', action: 'add', reason: 't', payload: { lon: midpoint(free[2].geometry)[0], lat: midpoint(free[2].geometry)[1], label: `8${String(stamp).slice(-3)}` } });
+const pp2 = await aee.post('/api/change-requests', { entity: 'pipe', action: 'add', reason: 't', payload: { from: mh2.request.target_id, to: free[3].properties.from, dia_mm: 150 } });
+await admin.post(`/api/change-requests/${mh2.request.id}/reject`, { note: 'No' });
+const pp2s = (await admin.get('/api/change-requests?status=all')).requests.find((r) => r.id === pp2.request.id);
+ok(pp2s.status === 'rejected', `the pipe request closes with its rejected manhole (${pp2s.status})`);
+ok((await aee.post('/api/stretches/bulk', { ids: [sp1.id], changes: [{ path: 'motorable', to: 'yes' }], photos: ['00000000-0000-4000-8000-000000000000'] })).status === 400, 'bulk refuses a photo that does not exist');
+// bad input gives 4xx, never 500
+ok((await admin.get('/api/stretches/abc')).status === 404, 'non-id stretch is 404');
+ok((await admin.post(`/api/stretches/${sp1.id}/revert`, {})).status === 400, 'revert without a version is 400');
+ok((await admin.patch('/api/users/abc', { name: 'X Y' })).status === 404, 'non-id user is 404');
+ok((await admin.get('/api/activity?limit=-5')).status === 200, 'negative activity limit is handled');
+ok((await aee.post('/api/labour', { log_date: '2026-13-45', ward: 10, labourers: 1 })).status === 400, 'impossible date refused');
+const tmr = new Date(Date.now() + 86400000).toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+ok((await aee.post('/api/labour', { log_date: tmr, ward: 10, labourers: 1 })).status === 400, 'tomorrow refused for labour');
+ok((await aee.post('/api/issues', { kind: 'other', location: loc, description: 'x', stretch_id: '00000000-0000-4000-8000-000000000000' })).status === 400, 'issue on a missing stretch is 400');
+const enc = await fetch(base + '/%61pi/labour', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+ok(enc.status === 403, `encoded path still needs the app header (${enc.status})`);
+// editing your own user keeps you signed in
+const me = (await admin.get('/api/auth/me')).user;
+ok((await admin.patch(`/api/users/${me.id}`, { name: me.name, role: 'admin' })).status === 200 && (await admin.get('/api/auth/me')).status === 200, 'editing your own entry keeps you signed in');
+
+// ---- a save resent after a lost reply returns the first result (no duplicate)
+const key = `test-${stamp}-issue`;
+const idem = async () => (await aee.call('POST', '/api/issues', { kind: 'other', location: loc, description: 'Resent test' }, { headers: { 'x-idempotency-key': key } }));
+const i1 = await idem();
+const i2 = await idem();
+ok(i1.status === 200 && i2.status === 200 && i1.id === i2.id, `resending with the same key gives the same issue (${i1.code} / ${i2.code})`);
+const pk = `test-${stamp}-photo`;
+const up = async () => { const jpg = Buffer.from('/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=', 'base64'); const fd = new FormData(); fd.append('file', new Blob([jpg], { type: 'image/jpeg' }), 'p.jpg'); return aee.call('POST', '/api/photos', fd, { headers: { 'x-idempotency-key': pk } }) };
+const p1 = await up();
+const p2 = await up();
+ok(p1.id && p1.id === p2.id, 'resending a photo with the same key does not store it twice');
+const otherUser = await admin.call('POST', '/api/issues', { kind: 'other', location: loc, description: 'Same key, other user' }, { headers: { 'x-idempotency-key': key } });
+ok(otherUser.status === 200 && otherUser.id !== i1.id, 'keys are per user');
 
 // ---- clean up test users (deactivate)
 await admin.patch(`/api/users/${mk.user.id}`, { active: false });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { FeatureCollection } from 'geojson'
 import { THEMES, issueLabel, type Theme } from '../../../shared/status.ts'
-import { inPolygon, lengthM, midpoint, type LineGeometry, type LonLat } from '../../../shared/geo.ts'
+import { lengthM, midpoint, wardAt as wardOfPoint, type LineGeometry, type LonLat, type WardLike } from '../../../shared/geo.ts'
 import BulkForm from '../components/BulkForm'
 import DetailPanel from '../components/DetailPanel'
 import { IssueDetail, IssueForm } from '../components/IssueForms'
@@ -57,10 +57,9 @@ export default function MapPage({ toast, focus }: { toast: (m: string, t?: 'ok' 
   const editor = user?.role === 'admin' || user?.role === 'editor'
   const isAdmin = user?.role === 'admin'
 
-  const wardAt = useCallback((p: LonLat): number | null => {
-    for (const w of geo.wards.features) if (inPolygon(p, w.geometry as never)) return w.properties.ward
-    return null
-  }, [geo.wards])
+  // Outside every ward boundary, the nearest ward (part of the network lies outside the KML outlines).
+  const wardInfo = useCallback((p: LonLat) => wardOfPoint(p, geo.wards.features as unknown as WardLike[]), [geo.wards])
+  const wardAt = useCallback((p: LonLat): number => wardInfo(p).ward, [wardInfo])
 
   // ---- overlays
   const filterFn = useCallback((p: StretchFeature['properties']) => {
@@ -182,9 +181,9 @@ export default function MapPage({ toast, focus }: { toast: (m: string, t?: 'ok' 
       const p = idx.pipeById.get(id)
       if (p) { mh.add(p.from); mh.add(p.to) }
     }
-    const ward = wardAt(midpoint(geometry)) ?? 0
-    return { geometry, pipe_ids: pipeIds, length_m: lengthM(geometry), planned_mh: mh.size, ward }
-  }, [tool, idx, wardAt])
+    const w = wardInfo(midpoint(geometry))
+    return { geometry, pipe_ids: pipeIds, length_m: lengthM(geometry), planned_mh: mh.size, ward: w.ward, outside_ward: !w.inside }
+  }, [tool, idx, wardInfo])
 
   // ---- map taps
   const onClick = useCallback((c: MapClick) => {
@@ -198,18 +197,19 @@ export default function MapPage({ toast, focus }: { toast: (m: string, t?: 'ok' 
     if (tool.t === 'stretch' && tool.method === 'pick' && c.hit?.kind === 'pipe') {
       const id = c.hit.id
       const already = stretches.features.find((f) => f.properties.pipe_ids.includes(id) && f.id !== tool.redraw?.id)
-      if (already && !tool.pipes.includes(id)) toast(`That pipe is already in stretch ${already.properties.code}.`, 'warn')
+      // A pipe belongs to one stretch (the server refuses it too): lengths would otherwise count twice.
+      if (already && !tool.pipes.includes(id)) return toast(`That pipe is already in stretch ${already.properties.code}. Open ${already.properties.code} to change it.`, 'warn')
       setTool({ ...tool, pipes: tool.pipes.includes(id) ? tool.pipes.filter((x) => x !== id) : [...tool.pipes, id] })
     } else if (tool.t === 'stretch' && tool.method === 'draw') {
       setTool({ ...tool, points: [...tool.points, c.snap ? { c: c.snap.coord, mh: c.snap.id } : { c: c.lngLat }] })
     } else if (tool.t === 'manhole') {
       const w = wardAt(c.lngLat)
-      if (!canEditWard(user, w ?? -1) && !isAdmin) return toast(`Ward ${w ?? '?'} is not assigned to you.`, 'bad')
+      if (!canEditWard(user, w) && !isAdmin) return toast(`Ward ${w} is not assigned to you.`, 'bad')
       setForm({ f: 'manhole', point: c.lngLat })
       setTool(null)
     } else if (tool.t === 'issue') {
       const w = wardAt(c.lngLat)
-      if (!canEditWard(user, w ?? -1) && !isAdmin) return toast(`Ward ${w ?? '?'} is not assigned to you.`, 'bad')
+      if (!canEditWard(user, w) && !isAdmin) return toast(`Ward ${w} is not assigned to you.`, 'bad')
       setForm({ f: 'issue', point: c.lngLat, stretch: tool.stretch })
       setTool(null)
     } else if (tool.t === 'pipe' && (c.hit?.kind === 'manhole' || c.hit?.kind === 'proposal')) {
@@ -230,7 +230,6 @@ export default function MapPage({ toast, focus }: { toast: (m: string, t?: 'ok' 
 
   async function finishStretch() {
     if (tool?.t !== 'stretch' || !built) return
-    if (!built.ward) return toast('The line is outside the municipal wards.', 'bad')
     if (!canEditWard(user, built.ward)) return toast(`Ward ${built.ward} is not assigned to you.`, 'bad')
     if (tool.redraw) {
       try {
@@ -300,7 +299,7 @@ export default function MapPage({ toast, focus }: { toast: (m: string, t?: 'ok' 
                 <div className="tool-hint">
                   {tool.method === 'pick' ? 'Tap the pipe reaches along the road. Tap again to remove.' : 'Tap along the road; taps near a manhole snap to it.'}
                 </div>
-                <div className="tool-stats">{built ? `${Math.round(built.length_m)} m · ${built.pipe_ids.length} reaches · ${built.planned_mh} manholes · ward ${built.ward || '?'}` : 'Nothing selected yet'}</div>
+                <div className="tool-stats">{built ? `${Math.round(built.length_m)} m · ${built.pipe_ids.length} reaches · ${built.planned_mh} manholes · ward ${built.ward}${built.outside_ward ? ' (outside ward boundary)' : ''}` : 'Nothing selected yet'}</div>
                 <div className="btn-row">
                   {tool.method === 'draw' && tool.points.length > 0 && <button className="btn" onClick={() => setTool({ ...tool, points: tool.points.slice(0, -1) })}>Undo</button>}
                   <button className="btn" onClick={() => setTool(null)}>Cancel</button>

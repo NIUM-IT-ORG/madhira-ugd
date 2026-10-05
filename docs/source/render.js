@@ -105,7 +105,7 @@ function toDocx(doc) {
         for (const it of b.items) children.push(new Paragraph({ numbering: { reference: 'bullets', level: 0 }, spacing: { after: 60 }, children: runs(it) }));
         break;
       case 'steps': {
-        const inst = ++listInstance;
+        const inst = b.continue ? listInstance : ++listInstance; // continue: keep counting from the previous list
         for (const it of b.items) {
           const step = typeof it === 'string' ? { text: it } : it;
           children.push(new Paragraph({ numbering: { reference: 'steps', level: 0, instance: inst }, spacing: { after: step.code ? 40 : 80 }, children: runs(step.text) }));
@@ -142,6 +142,29 @@ function toDocx(doc) {
           children: [new ImageRun({ type, data: fs.readFileSync(b.path), transformation: { width, height }, altText: { title: b.caption ?? 'Screenshot', description: b.caption ?? 'Screenshot', name: path.basename(b.path) } })],
         }));
         if (b.caption) children.push(new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [new TextRun({ text: b.caption, italics: true, color: MUTED, size: 18 })] }));
+        break;
+      }
+      case 'shots': {
+        // Phone screenshots side by side, each with a short caption; the row never splits across pages.
+        const n = b.items.length;
+        const colW = Math.floor(CONTENT_W / n);
+        const none = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+        const cells = b.items.map((it) => {
+          const { w, h, type } = imageSize(it.path);
+          const width = Math.min((b.width ?? 1.75) * 96, w);
+          const height = Math.round((h / w) * width);
+          return new TableCell({
+            width: { size: colW, type: WidthType.DXA },
+            borders: { top: none, bottom: none, left: none, right: none },
+            margins: { top: 40, bottom: 40, left: 60, right: 60 },
+            children: [
+              new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new ImageRun({ type, data: fs.readFileSync(it.path), transformation: { width, height }, altText: { title: it.caption, description: it.caption, name: path.basename(it.path) } })] }),
+              new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 0 }, children: runs(it.caption, { italics: true, color: MUTED, size: 17 }) }),
+            ],
+          });
+        });
+        children.push(new Table({ width: { size: colW * n, type: WidthType.DXA }, columnWidths: Array(n).fill(colW), layout: TableLayoutType.FIXED, alignment: AlignmentType.CENTER, rows: [new TableRow({ cantSplit: true, children: cells })] }));
+        children.push(new Paragraph({ spacing: { after: 120 }, children: [] }));
         break;
       }
       case 'pagebreak':
@@ -205,7 +228,7 @@ function toMarkdown(doc) {
     else if (b.t === 'p') out.push(b.text, '');
     else if (b.t === 'bullets') out.push(...b.items.map((i) => `- ${i}`), '');
     else if (b.t === 'steps') {
-      n = 0;
+      if (!b.continue) n = 0;
       for (const it of b.items) {
         const s = typeof it === 'string' ? { text: it } : it;
         out.push(`${++n}. ${s.text}`);
@@ -218,6 +241,7 @@ function toMarkdown(doc) {
       out.push(`| ${b.head.map(esc).join(' | ')} |`, `| ${b.head.map(() => '---').join(' | ')} |`, ...b.rows.map((r) => `| ${r.map(esc).join(' | ')} |`), '');
     } else if (b.t === 'note') out.push(`> ${b.label ? `**${b.label}** ` : ''}${b.text}`, '');
     else if (b.t === 'image') out.push(`_[Screenshot: ${b.caption ?? ''}]_`, '');
+    else if (b.t === 'shots') out.push(...b.items.map((i) => `_[Screenshot: ${i.caption}]_`), '');
   }
   return out.join('\n');
 }

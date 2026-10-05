@@ -59,7 +59,7 @@ export function midpoint(g: LineGeometry): LonLat {
 }
 
 type Ring = LonLat[]
-type PolygonGeom = { type: 'Polygon'; coordinates: Ring[] } | { type: 'MultiPolygon'; coordinates: Ring[][] }
+export type PolygonGeom = { type: 'Polygon'; coordinates: Ring[] } | { type: 'MultiPolygon'; coordinates: Ring[][] }
 
 function inRing(p: LonLat, ring: Ring): boolean {
   let inside = false
@@ -84,4 +84,24 @@ export function bbox(g: LineGeometry): [number, number, number, number] {
     if (y > y1) y1 = y
   }
   return [x0, y0, x1, y1]
+}
+
+export interface WardLike { geometry: PolygonGeom; properties: { ward: number; zone: number } }
+
+/**
+ * Ward (and its zone) containing the point; outside every ward boundary, the nearest ward.
+ * Part of the sewer network lies outside the ward boundaries drawn in the KML (15% of the pipes, up to ~650 m),
+ * so nothing is ever refused for being outside a ward: it belongs to the nearest one, flagged inside = false.
+ */
+export function wardAt(p: LonLat, wards: WardLike[]): { ward: number; zone: number; inside: boolean; distance_m: number } {
+  for (const w of wards) if (inPolygon(p, w.geometry)) return { ward: w.properties.ward, zone: w.properties.zone, inside: true, distance_m: 0 }
+  let best = { ward: wards[0].properties.ward, zone: wards[0].properties.zone, inside: false, distance_m: Infinity }
+  for (const w of wards) {
+    const polys = w.geometry.type === 'Polygon' ? [w.geometry.coordinates] : w.geometry.coordinates
+    for (const rings of polys) {
+      const d = distanceToLineM(p, { type: 'LineString', coordinates: rings[0] })
+      if (d < best.distance_m) best = { ward: w.properties.ward, zone: w.properties.zone, inside: false, distance_m: d }
+    }
+  }
+  return best
 }

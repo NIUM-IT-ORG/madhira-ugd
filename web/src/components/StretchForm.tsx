@@ -16,6 +16,7 @@ export interface NewStretch {
   length_m: number
   planned_mh: number
   ward: number
+  outside_ward?: boolean
 }
 
 interface Props {
@@ -100,6 +101,7 @@ export default function StretchForm({ existing, draft, onClose, onSaved }: Props
   }
 
   const tapsOpen = Math.max(0, s.utilities.taps_broken - s.utilities.taps_restored)
+  const leaksOpen = Math.max(0, s.utilities.water_leaks - s.utilities.water_leaks_fixed)
   const title = existing ? <>Update {existing.properties.code}{existing.properties.name ? ` · ${existing.properties.name}` : ''}</> : 'New road stretch'
 
   return (
@@ -122,7 +124,7 @@ export default function StretchForm({ existing, draft, onClose, onSaved }: Props
         <div className="stage-line">
           <StageDot colour={STAGE_COLOUR[stage]} />
           <b>{Math.round(length)} m</b>
-          <span className="muted">· ward {existing?.properties.ward ?? draft?.ward} · {planned} manholes on plan</span>
+          <span className="muted">· ward {existing?.properties.ward ?? draft?.ward}{(existing?.properties.outside_ward ?? draft?.outside_ward) ? ' (outside ward boundary)' : ''} · {planned} manholes on plan</span>
         </div>
         <Tags tags={tags} />
       </div>
@@ -181,9 +183,14 @@ export default function StretchForm({ existing, draft, onClose, onSaved }: Props
             <Stepper value={s.utilities.taps_restored} max={s.utilities.taps_broken} onChange={(v) => set('utilities', { taps_restored: v })} />
           </Field>
         </div>
-        <Field label="Water pipe leakages">
-          <Stepper value={s.utilities.water_leaks} onChange={(v) => set('utilities', { water_leaks: v })} />
-        </Field>
+        <div className="row2">
+          <Field label="Water pipe leakages">
+            <Stepper value={s.utilities.water_leaks} onChange={(v) => set('utilities', { water_leaks: v, water_leaks_fixed: Math.min(s.utilities.water_leaks_fixed, v) })} />
+          </Field>
+          <Field label="Leakages fixed" hint={leaksOpen ? `${leaksOpen} still pending` : undefined}>
+            <Stepper value={s.utilities.water_leaks_fixed} max={s.utilities.water_leaks} onChange={(v) => set('utilities', { water_leaks_fixed: v })} />
+          </Field>
+        </div>
         <Toggle checked={s.utilities.drain_clogged} onChange={(v) => set('utilities', { drain_clogged: v })} label="Drain clogged with gravel" />
       </Bucket>
 
@@ -195,7 +202,7 @@ export default function StretchForm({ existing, draft, onClose, onSaved }: Props
         <Toggle checked={s.hazards.uneven_backfill} onChange={(v) => set('hazards', { uneven_backfill: v })} label="Uneven back-fill" />
       </Bucket>
 
-      <Field label="Photos" hint="Needed for restoration claims and newly reported damage. Each photo keeps its GPS position and time.">
+      <Field label="Photos" hint="Needed when you mark the CC road restored; useful for damage too. Each photo keeps its GPS position and time.">
         <PhotoPicker photos={photos} setPhotos={setPhotos} gps={gps} required={check.errors.some((e) => e.startsWith('Attach a photo'))} />
       </Field>
       <Field label="Note (optional)">

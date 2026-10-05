@@ -1,12 +1,17 @@
 import ExcelJS from 'exceljs';
 import { STAGES, ISSUE_KINDS, label, normaliseStatus } from '../../../shared/status.ts';
 import { addStretch, emptyField, progressTable } from '../../../shared/stats.ts';
-import { reference } from '../reference.js';
+import { reference, wardOfGeometry } from '../reference.js';
 
 const issueLabel = (k) => ISSUE_KINDS.find((i) => i.key === k)?.label ?? k;
 // Report dates in local (India) time; TIME_ZONE can override.
 const TZ = process.env.TIME_ZONE ?? 'Asia/Kolkata';
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: TZ });
+// Excel has no time zones: write the India wall-clock time, so 13:38 IST shows as 13:38.
+const IST_MS = 330 * 60000;
+const ist = (v) => (v ? new Date(new Date(v).getTime() + IST_MS) : null);
+const istText = (v) => (v ? new Date(v).toLocaleString('en-IN', { timeZone: TZ, dateStyle: 'medium', timeStyle: 'short' }) : '');
+const dateCols = (ws, ...cols) => { for (const c of cols) ws.getColumn(c).numFmt = 'dd-mmm-yyyy hh:mm' };
 
 async function loadAll(db) {
   const stretches = (await db.query(
@@ -14,7 +19,7 @@ async function loadAll(db) {
      where s.deleted_at is null and s.record_state <> 'rejected' order by s.code`,
   )).rows.map((r) => ({ ...r, status: normaliseStatus(r.status) }));
   const issues = (await db.query(
-    `select i.*, s.code as stretch_code, ru.name as reported_by_name, xu.name as resolved_by_name
+    `select i.*, to_char(i.due_date, 'YYYY-MM-DD') as due_date, s.code as stretch_code, ru.name as reported_by_name, xu.name as resolved_by_name
      from issues i left join stretches s on s.id = i.stretch_id left join users ru on ru.id = i.reported_by
      left join users xu on xu.id = i.resolved_by order by i.reported_at`,
   )).rows;
@@ -34,6 +39,20 @@ function weekStart(d) {
 
 // KML colours are aabbggrr.
 const kmlColour = (hex, alpha = 'ff') => `${alpha}${hex.slice(5, 7)}${hex.slice(3, 5)}${hex.slice(1, 3)}`;
+function addIssuesSheet(wb, issues) {
+  const is = wb.addWorksheet('Issues', { views: [{ state: 'frozen', ySplit: 1 }] });
+  is.columns = [
+    ['Code', 9], ['Issue', 26], ['Count', 7], ['Zone', 6], ['Ward', 6], ['Stretch', 10], ['Severity', 9], ['Status', 10], ['Assigned to', 20],
+    ['Due', 11], ['Reported by', 18], ['Reported', 18], ['Resolved by', 18], ['Resolved', 18], ['Resolution', 40], ['Description', 40],
+  ].map(([header, width]) => ({ header, width }));
+  is.getRow(1).font = { bold: true };
+  for (const i of issues) {
+    is.addRow([i.code, issueLabel(i.kind), i.count, i.zone, i.ward, i.stretch_code, i.severity, i.status, i.assigned_to, i.due_date,
+      i.reported_by_name, ist(i.reported_at), i.resolved_by_name, ist(i.resolved_at), i.resolution_note, i.description]);
+  }
+  dateCols(is, 12, 14);
+}
+
 const esc = (s) => String(s ?? '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]);
 
 export function registerReportRoutes(app, db) {
@@ -131,8 +150,8 @@ export function registerReportRoutes(app, db) {
     ss.columns = [
       ['Code', 10], ['Road', 28], ['Zone', 6], ['Ward', 6], ['Length (m)', 10], ['Plan MH', 8], ['Overall stage', 26], ['Pipeline', 22],
       ['Pipe laid (m)', 10], ['MH built', 8], ['IC built', 8], ['Excavation', 22], ['Cut length (m)', 10], ['CC restoration', 26], ['Approval', 10],
-      ['Motorability', 22], ['Taps broken', 9], ['Taps restored', 9], ['Water leaks', 9], ['Drain clogged', 9], ['Water stagnation', 9],
-      ['Potholes', 8], ['Uneven back-fill', 9], ['Open issues', 8], ['Record', 10], ['Last update', 18], ['By', 18],
+      ['Motorability', 22], ['Taps broken', 9], ['Taps restored', 9], ['Water leaks', 9], ['Leaks fixed', 9], ['Drain clogged', 9], ['Water stagnation', 9],
+      ['Potholes', 8], ['Uneven back-fill', 9], ['Open issues', 8], ['Record', 10], ['Last update', 18], ['By', 18], ['Outside ward boundary', 10],
     ].map(([header, width]) => ({ header, width }));
     ss.getRow(1).font = { bold: true };
     for (const s of stretches) {
@@ -141,22 +160,15 @@ export function registerReportRoutes(app, db) {
         s.code, s.name, s.zone, s.ward, Math.round(s.length_m), s.planned_mh, STAGES.find((x) => x.key === s.stage)?.label,
         label('pipeline', st.sewer.pipeline), st.sewer.pipe_laid_m, st.sewer.manholes_built, st.sewer.ics_built,
         label('excavation', st.excavation.stage), st.excavation.cut_length_m, label('restoration', st.restoration.stage), s.approval,
-        label('motorable', st.motorable), st.utilities.taps_broken, st.utilities.taps_restored, st.utilities.water_leaks,
+        label('motorable', st.motorable), st.utilities.taps_broken, st.utilities.taps_restored, st.utilities.water_leaks, st.utilities.water_leaks_fixed,
         st.utilities.drain_clogged ? 'Yes' : 'No', st.hazards.water_stagnation ? 'Yes' : 'No', st.hazards.potholes,
-        st.hazards.uneven_backfill ? 'Yes' : 'No', s.open_issues, s.record_state, s.updated_at, s.updated_by_name,
+        st.hazards.uneven_backfill ? 'Yes' : 'No', s.open_issues, s.record_state, ist(s.updated_at), s.updated_by_name,
+        wardOfGeometry(s.geometry).inside ? '' : 'Yes',
       ]);
     }
+    dateCols(ss, 27);
 
-    const is = wb.addWorksheet('Issues', { views: [{ state: 'frozen', ySplit: 1 }] });
-    is.columns = [
-      ['Code', 9], ['Issue', 26], ['Count', 7], ['Zone', 6], ['Ward', 6], ['Stretch', 10], ['Severity', 9], ['Status', 10], ['Assigned to', 20],
-      ['Due', 11], ['Reported by', 18], ['Reported', 18], ['Resolved by', 18], ['Resolved', 18], ['Resolution', 40], ['Description', 40],
-    ].map(([header, width]) => ({ header, width }));
-    is.getRow(1).font = { bold: true };
-    for (const i of issues) {
-      is.addRow([i.code, issueLabel(i.kind), i.count, i.zone, i.ward, i.stretch_code, i.severity, i.status, i.assigned_to, i.due_date,
-        i.reported_by_name, i.reported_at, i.resolved_by_name, i.resolved_at, i.resolution_note, i.description]);
-    }
+    addIssuesSheet(wb, issues);
 
     const ls = wb.addWorksheet('Labour');
     ls.columns = [['Date', 12], ['Zone', 6], ['Ward', 6], ['Labourers', 10], ['Machines', 10], ['Note', 30], ['Entered by', 18]].map(([header, width]) => ({ header, width }));
@@ -171,12 +183,30 @@ export function registerReportRoutes(app, db) {
     cs.columns = [['Code', 9], ['What', 10], ['Action', 8], ['Target', 22], ['Ward', 6], ['Reason', 36], ['Requested by', 18], ['Requested', 18],
       ['Status', 10], ['Decided by', 18], ['Decided', 18], ['Decision note', 36]].map(([header, width]) => ({ header, width }));
     cs.getRow(1).font = { bold: true };
-    for (const c of cr) cs.addRow([c.code, c.entity, c.action, c.payload?.label ?? c.target_id, c.ward, c.reason, c.rn, c.requested_at, c.status, c.dn, c.decided_at, c.decision_note]);
+    for (const c of cr) cs.addRow([c.code, c.entity, c.action, c.payload?.label ?? c.target_id, c.ward, c.reason, c.rn, ist(c.requested_at), c.status, c.dn, ist(c.decided_at), c.decision_note]);
+    dateCols(cs, 8, 11);
 
     const buf = await wb.xlsx.writeBuffer();
     reply
       .header('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
       .header('content-disposition', `attachment; filename="UGD-progress-${today()}.xlsx"`);
+    return reply.send(Buffer.from(buf));
+  });
+
+  // Issues only, with the filters of the Issues page (kind, zone, ward, severity, status).
+  app.get('/api/export/issues.xlsx', auth, async (req, reply) => {
+    const f = req.query ?? {};
+    const { issues } = await loadAll(db);
+    const list = issues.filter((i) => (!f.kind || i.kind === f.kind) && (!f.zone || String(i.zone) === String(f.zone)) &&
+      (!f.ward || String(i.ward) === String(f.ward)) && (!f.severity || i.severity === f.severity) && (!f.status || i.status === f.status));
+    const wb = new ExcelJS.Workbook();
+    wb.creator = 'Madhira UGD Tracker';
+    addIssuesSheet(wb, list);
+    const buf = await wb.xlsx.writeBuffer();
+    const tag = f.ward ? `-ward${Number(f.ward)}` : f.zone ? `-zone${Number(f.zone)}` : '';
+    reply
+      .header('content-type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+      .header('content-disposition', `attachment; filename="UGD-issues${tag}-${today()}.xlsx"`);
     return reply.send(Buffer.from(buf));
   });
 
@@ -192,7 +222,7 @@ export function registerReportRoutes(app, db) {
         `Stage: ${STAGES.find((x) => x.key === s.stage)?.label}`, `Length: ${Math.round(s.length_m)} m`,
         `Pipeline: ${label('pipeline', st.sewer.pipeline)}; MH built ${st.sewer.manholes_built}/${s.planned_mh}; IC built ${st.sewer.ics_built}`,
         `Excavation: ${label('excavation', st.excavation.stage)}`, `CC restoration: ${label('restoration', st.restoration.stage)} (${s.approval})`,
-        `Motorability: ${label('motorable', st.motorable)}`, `Open issues: ${s.open_issues}`, `Last update: ${s.updated_by_name ?? ''} ${new Date(s.updated_at).toISOString().slice(0, 16)}`,
+        `Motorability: ${label('motorable', st.motorable)}`, `Open issues: ${s.open_issues}`, `Last update: ${s.updated_by_name ?? ''} ${istText(s.updated_at)}`,
       ].map(esc).join('<br/>');
       return `<Placemark><name>${esc(s.code)}${s.name ? ` · ${esc(s.name)}` : ''}</name><styleUrl>#${s.stage}</styleUrl>
         <description><![CDATA[${desc}]]></description>

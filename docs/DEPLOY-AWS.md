@@ -1,6 +1,6 @@
 # Deployment Guide: Git and AWS
 
-_Release v1.0 · 2 October 2026 · one AWS EC2 server with Docker (vendor-neutral package)_
+_Release v1.1 · 3 October 2026 · one AWS EC2 server with Docker (vendor-neutral package)_
 
 This guide takes the release package to a working, secure website on AWS in about an hour, and sets up the Git repository the municipality will keep the code in. Everything in the package uses open formats (Docker/OCI container, Docker Compose, PostgreSQL, GeoJSON, PMTiles), so the same package also runs on any other cloud or an on-premise server (see `docs/DEPLOY-GENERIC.md`).
 
@@ -9,12 +9,12 @@ This guide takes the release package to a working, secure website on AWS in abou
 | Website | `https://<your domain>` with an automatic, free, auto-renewing TLS certificate |
 | Server | 1 × EC2 (Ubuntu 24.04) in Mumbai, ap-south-1, running 3 containers: PostgreSQL, the app, Caddy (HTTPS) |
 | Data kept in India | Database and photos on the server's encrypted disk, nightly backups, daily disk snapshots |
-| Code | Private Git repository (GitHub, GitLab, Bitbucket or your own), tag `v1.0`, created from the package in Part A |
+| Code | Private Git repository (GitHub, GitLab, Bitbucket or your own), tag `v1.1`, created from the package in Part A |
 | Accounts | Commissioner, AEE and Field Inspector, created on first start with one-time passwords (in the user guides) |
 
 ## Part 0. What you received
 
-`madhira-ugd-v1.0.zip` (130 MB) and `SHA256SUMS.txt`. Unzipped, the folder `madhira-ugd/` holds every file of release v1.0; Part A turns it into the municipality's Git repository.
+`madhira-ugd-v1.1.zip` (≈130 MB) and `SHA256SUMS.txt`. Unzipped, the folder `madhira-ugd/` holds every file of release v1.1; Part A turns it into the municipality's Git repository.
 
 | Folder / file | Contents |
 | --- | --- |
@@ -33,7 +33,7 @@ This guide takes the release package to a working, secure website on AWS in abou
 ```bash
 sha256sum -c SHA256SUMS.txt        # Linux
 shasum -a 256 -c SHA256SUMS.txt    # macOS
-# expected: madhira-ugd-v1.0.zip: OK
+# expected: madhira-ugd-v1.1.zip: OK
 ```
 
 > **Contains one-time passwords.** The user guides in `docs/` contain the starting passwords for the three accounts. They stop working once each person signs in and sets their own password, but treat the package as confidential until then.
@@ -46,12 +46,12 @@ The municipality should own the code in its own private repository. The largest 
 2. On an office machine with Git installed, unzip the package, record it as the first commit, tag it and push it:
 
    ```bash
-   unzip madhira-ugd-v1.0.zip
+   unzip madhira-ugd-v1.1.zip
    cd madhira-ugd
    git init -b main
    git add -A
-   git commit -m "Madhira UGD Tracker v1.0"
-   git tag -a v1.0 -m "Release v1.0"
+   git commit -m "Madhira UGD Tracker v1.1"
+   git tag -a v1.1 -m "Release v1.1"
    git remote add origin <your repository URL>
    git push -u origin main --tags
    ```
@@ -166,10 +166,10 @@ printf "Host <git-host>\n  IdentityFile ~/.ssh/madhira_deploy\n" >> ~/.ssh/confi
 ```bash
 sudo mkdir -p /opt/madhira-ugd && sudo chown ubuntu:ubuntu /opt/madhira-ugd
 git clone git@<git-host>:<org>/madhira-ugd.git /opt/madhira-ugd
-cd /opt/madhira-ugd && git checkout v1.0
+cd /opt/madhira-ugd && git checkout v1.1
 ```
 
-No Git host yet? Copy the zip instead: `scp -i madhira-ugd.pem madhira-ugd-v1.0.zip ubuntu@<elastic-ip>:/opt/` then `cd /opt && unzip madhira-ugd-v1.0.zip`. The folder must end up at `/opt/madhira-ugd` (the backup script and runbook assume this name).
+No Git host yet? Copy the zip instead: `scp -i madhira-ugd.pem madhira-ugd-v1.1.zip ubuntu@<elastic-ip>:/opt/` then `cd /opt && unzip madhira-ugd-v1.1.zip`. The folder must end up at `/opt/madhira-ugd` (the backup script and runbook assume this name).
 
 ### B9. Settings and first start
 
@@ -238,6 +238,18 @@ This also checks the 22 wards, the sewer network, all four imagery frames, the p
 
 ### B14. Updates and rollback
 
+A new release arrives as a new zip. **If you already set up the repository from an earlier zip** (Part A), bring the new files into it on the office machine, then update the server:
+
+```bash
+cd madhira-ugd                                  # the repository from Part A
+unzip ../madhira-ugd-v1.1.zip -d /tmp/ugd-new
+rsync -a --delete --exclude .git /tmp/ugd-new/madhira-ugd/ ./
+git add -A && git commit -m "Madhira UGD Tracker v1.1"
+git tag -a v1.1 -m "Release v1.1" && git push origin main --tags
+```
+
+On the server:
+
 ```bash
 cd /opt/madhira-ugd
 sh deploy/backup.sh                       # backup first
@@ -287,7 +299,7 @@ Prices change; confirm with the AWS Pricing Calculator. A 1-year Savings Plan or
 | AWS account / region | ap-south-1 |
 | Instance ID / Elastic IP |  |
 | Git repository URL |  |
-| Deployed tag and date | v1.0 ·  |
+| Deployed tag and date | v1.1 ·  |
 | Backup location(s) | /opt/madhira-ugd/backups · EBS snapshots |
 | IT contact |  |
 

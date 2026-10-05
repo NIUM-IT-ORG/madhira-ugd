@@ -39,7 +39,17 @@ docker compose up -d --build # rebuilds the app; database changes apply automati
 docker compose exec app node server/test/postdeploy-check.mjs https://<DOMAIN>
 ```
 Take a backup first (`sh deploy/backup.sh`). Roll back by checking out the previous release tag
-(`git checkout v1.0`) and running `docker compose up -d --build` again.
+(`git checkout v1.0`) and running `docker compose up -d --build` again. Going back from v1.1 to v1.0 is safe:
+v1.1 only adds two tables (`storage_purges`, `request_keys`) and a status field (`water_leaks_fixed`) that v1.0 ignores.
+
+## Disk space and old data
+
+Photos use almost all the space (≈1–3 GB a year); the database stays small. The Commissioner's **Storage** page
+shows the usage and the server's free disk (red below 10%) and deletes old data by date: photos, older stretch
+history, resolved issues, decided change requests, deleted/rejected stretches, labour, the sign-in log and the
+clean-up log. It offers a zip archive (Excel of the records + photo files) before deleting, and records each
+clean-up in `storage_purges`. Deleted data remains in the nightly backups for their 30-day retention.
+The sewer network and the current status of every stretch are never deleted there.
 
 ## People and access
 
@@ -81,4 +91,4 @@ git commit -am "Progress baseline <date>" && docker compose up -d --build
 | Live updates do not arrive | A proxy in front must not buffer `/api/events` (Caddy config already handles this) |
 | Photo upload fails | Disk space (`df -h`); photo larger than `MAX_PHOTO_MB` |
 | "Someone else changed this stretch" | Expected when two people edit the same field at once; reopen the stretch and save again |
-| Disk filling up | Photos grow ~1–3 GB per year at normal use; old backups are pruned after 30 days |
+| Disk filling up | Photos grow ~1–3 GB per year at normal use; old backups are pruned after 30 days. The Commissioner can archive and delete old photos on the Storage page, or grow the disk (EBS volume) |

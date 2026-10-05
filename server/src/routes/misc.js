@@ -9,6 +9,13 @@ import { publish } from '../events.js';
 import { reference } from '../reference.js';
 
 const MIME_EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+// Real calendar days only (2026-13-45 is refused), compared as India-time dates.
+const isDay = (s) => {
+  if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const t = Date.parse(`${s}T00:00:00Z`);
+  return !Number.isNaN(t) && new Date(t).toISOString().slice(0, 10) === s;
+};
+const todayIST = () => new Date().toLocaleDateString('en-CA', { timeZone: process.env.TIME_ZONE ?? 'Asia/Kolkata' });
 const numOrNull = (v) => (v === undefined || v === '' || v === null || Number.isNaN(Number(v)) ? null : Number(v));
 
 export function registerMiscRoutes(app, db) {
@@ -60,7 +67,7 @@ export function registerMiscRoutes(app, db) {
 
   // ---- activity feed: who changed what, newest first.
   app.get('/api/activity', auth, async (req) => {
-    const limit = Math.min(300, Number(req.query.limit) || 80);
+    const limit = Math.max(1, Math.min(300, Math.floor(Number(req.query.limit)) || 80));
     const stretch = (await db.query(
       `select 'stretch' as entity, v.kind as action, v.at, v.changes, v.note, v.flagged_far, v.gps_distance_m, v.photos,
          s.id as entity_id, s.code, s.name, s.ward, u.name as user_name, u.designation as user_designation
@@ -87,7 +94,7 @@ export function registerMiscRoutes(app, db) {
 
   // ---- labour deployed per ward per day (one entry per ward per day; a new entry replaces the old one).
   app.get('/api/labour', auth, async (req) => {
-    const from = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from ?? '') ? req.query.from : '2000-01-01';
+    const from = isDay(req.query.from) ? req.query.from : '2000-01-01';
     const rows = (await db.query(
       `select l.id, to_char(l.log_date, 'YYYY-MM-DD') as log_date, l.ward, l.zone, l.labourers, l.machines, l.note, l.at, u.name as user_name
        from labour_logs l left join users u on u.id = l.user_id where l.log_date >= $1 order by l.log_date desc, l.ward`, [from],
@@ -97,7 +104,7 @@ export function registerMiscRoutes(app, db) {
 
   app.post('/api/labour', auth, async (req, reply) => {
     const body = z.object({
-      log_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      log_date: z.string().refine(isDay),
       ward: z.number().int().min(1).max(22),
       labourers: z.number().int().min(0).max(2000),
       machines: z.number().int().min(0).max(200).default(0),
@@ -106,7 +113,7 @@ export function registerMiscRoutes(app, db) {
     if (!body.success) return reply.code(400).send({ error: 'Enter date, ward and number of labourers.' });
     const d = body.data;
     if (!canEditWard(req.user, d.ward)) return reply.code(403).send({ error: `Ward ${d.ward} is not assigned to you.` });
-    if (Date.parse(d.log_date) > Date.now() + 86400000) return reply.code(400).send({ error: 'The date cannot be in the future.' });
+    if (d.log_date > todayIST()) return reply.code(400).send({ error: 'The date cannot be in the future.' });
     const zone = reference.wards.find((w) => w.properties.ward === d.ward)?.properties.zone;
     await db.query(
       `insert into labour_logs (log_date, ward, zone, labourers, machines, note, user_id) values ($1, $2, $3, $4, $5, $6, $7)

@@ -87,7 +87,7 @@ export default function StretchDetail({ id, onSelect, onEdit, onRedraw, onAddIss
                 )}
               </div>
             )}
-            {p.approval === 'rejected' && <div className="callout bad">Restoration was rejected; see History for the reason. Record the corrected work to resubmit.</div>}
+            {p.approval === 'rejected' && <div className="callout bad">Restoration was rejected; see History for the reason. When the work is corrected, Update status with a new photo to send it for approval again.</div>}
             {pendingAdd && (
               <div className="callout warn">
                 Added by {pendingAdd.requested_by_name} · request {pendingAdd.code}.
@@ -108,7 +108,7 @@ export default function StretchDetail({ id, onSelect, onEdit, onRedraw, onAddIss
               <dt>E · Utilities</dt>
               <dd>
                 {s.utilities.taps_broken ? `Taps: ${s.utilities.taps_broken} broken, ${s.utilities.taps_restored} restored${taps ? `, ${taps} pending` : ''}` : 'No tap damage'}
-                {s.utilities.water_leaks ? ` · ${s.utilities.water_leaks} water leak(s)` : ''}
+                {s.utilities.water_leaks ? ` · Leaks: ${s.utilities.water_leaks} reported, ${s.utilities.water_leaks_fixed} fixed${s.utilities.water_leaks > s.utilities.water_leaks_fixed ? `, ${s.utilities.water_leaks - s.utilities.water_leaks_fixed} pending` : ''}` : ''}
                 {s.utilities.drain_clogged ? ' · drain clogged' : ''}
               </dd>
               <dt>F · Hazards</dt>
@@ -118,6 +118,7 @@ export default function StretchDetail({ id, onSelect, onEdit, onRedraw, onAddIss
               </dd>
             </dl>
             <div className="kv"><span className="k">Length · ward</span><span className="v">{Math.round(p.length_m)} m · ward {p.ward} (zone {p.zone})</span></div>
+            {p.outside_ward && <div className="note warn">Outside the KML ward outline; counted in the nearest ward.</div>}
             <div className="kv"><span className="k">Last update</span><span className="v">{p.updated_by_name ?? '—'} · {timeAgo(p.updated_at)}</span></div>
             {p.flagged_far && <div className="callout warn">The last update was made more than 200 m from this stretch.</div>}
 

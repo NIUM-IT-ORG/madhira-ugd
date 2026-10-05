@@ -1,4 +1,4 @@
-# Madhira UGD Tracker — release v1.0
+# Madhira UGD Tracker — release v1.1
 
 Web app for tracking the Underground Drainage scheme of Madhira Municipality: a satellite map of the
 sewer network road by road, field updates from the AEE and Field Inspector, approvals and progress
@@ -16,8 +16,10 @@ the documentation. Nothing else has to be downloaded except public software pack
 | IT team deploying elsewhere | `docs/DEPLOY-GENERIC.md` (any Linux server or cloud with Docker) |
 | Commissioner | `docs/user-guides/Commissioner-Guide.docx` |
 | AEE and Field Inspector | `docs/user-guides/AEE-and-Field-Inspector-Guide.docx` |
+| AEE, every task tap by tap | `docs/user-guides/AEE-Step-by-Step-Guide.docx` (also `.pdf` for the phone) |
 | Developers / GIS staff | `docs/ARCHITECTURE.md`, `docs/DATA-DICTIONARY.md`, `docs/IMAGERY-AND-GEOREFERENCING.md`, `docs/API.md` |
 | Running it day to day | `docs/OPERATIONS.md`, `docs/UAT-CHECKLIST.md` |
+| What changed | `docs/RELEASE-NOTES.md` |
 
 ## Deploy in brief (any server with Docker)
 
@@ -50,7 +52,7 @@ printed password no longer works. Treat this package as confidential until all t
 ## Handover checklist
 
 - [ ] Package checksum verified (`SHA256SUMS.txt`)
-- [ ] Folder committed and pushed to the municipality's private Git repository; tag `v1.0` (deployment guide, Part A)
+- [ ] Folder committed and pushed to the municipality's private Git repository; tag `v1.1` (deployment guide, Part A; upgrading from v1.0: part B14)
 - [ ] Site live on HTTPS; post-deploy check passes
 - [ ] Commissioner, AEE and Field Inspector have signed in and set their own passwords
 - [ ] Nightly backups and disk snapshots running; one restore tested

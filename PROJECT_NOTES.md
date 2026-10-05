@@ -95,3 +95,15 @@ Run in order: `01_wards_zones_baseline.py`, `02_imagery_tiles.py`, `03_georef_pl
   Docker image NOT built locally (no Docker on this Mac). Photos: disk volume only (no S3). One app instance (SSE in memory).
 - Guides: docs/GUIDE-COMMISSIONER.md, docs/GUIDE-AEE.md.
 - Next: Phase 6 = deploy on Commissioner's cloud (need VM access/domain), create real users, onboarding.
+
+## v1.1 (2026-10-03) — field-testing feedback
+- Pipes outside the KML ward outlines (582/3991, 15%; Z2 287, Z1 188, Z4 107; median 117 m, max 656 m) were refused
+  by the phone app ("outside the municipal wards"). Now: nearest ward everywhere (shared/geo.ts `wardAt(p, wards)`,
+  used by server and app), stretches carry `outside_ward`, Excel column "Outside ward boundary". Decision: nearest ward.
+- `utilities.water_leaks_fixed` (like taps_restored); leak issue/badge use pending = leaks - fixed.
+- Photos: required only for restoration claims; Report issue needs a remark (description), photo optional.
+- Issues page: ward + status filters, filtered Excel `/api/export/issues.xlsx`.
+- Storage page (admin): `/api/admin/storage*`, dry-run preview (tx rolled back), zip archive (yazl), purge with typed
+  DELETE, log in `storage_purges` (migration 003). Decision: everything is deletable by the Commissioner.
+- Tests: staging-test 83 checks (PGlite and pg driver); headless UI walk-through with puppeteer-core + system Chrome
+  (scratchpad/uitest) when the Browser pane is hidden.

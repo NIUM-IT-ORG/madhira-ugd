@@ -19,14 +19,19 @@ you try everything without touching real records.
 - [ ] Dashboard figures match the progress sheet (pipeline 54.7 of 99.6 km, manholes 1,976 of 4,387, ICs 491 of 2,655)
 - [ ] Download Excel opens in Excel; the KML opens in Google Earth
 - [ ] Users page lists Commissioner, AEE and Field Inspector
+- [ ] Issues page: choose Zone 2, then Ward 5; Download Excel gives only those issues
+- [ ] Storage page: usage shows; choose a date and Photos; Will delete shows a number; Download archive first gives a zip (do not delete on the live system during acceptance unless intended)
 
 ## AEE and Field Inspector (on their phones)
 
 - [ ] Sign in, set own password, add the app to the home screen, allow location
 - [ ] Record a stretch: pick pipes → fill the six sections → photo → save; it shows as proposed
+- [ ] Record a stretch on a pipe outside the ward outlines (e.g. in Madupalli): the bar shows "ward N (outside ward boundary)" and it saves
 - [ ] Commissioner approves it in **Approvals**; it becomes a normal stretch
 - [ ] Update it to "CC restored, curing done" with a photo; Commissioner approves; it turns green
-- [ ] Tick "drain clogged" with a photo; the issue appears in **Issues**; resolve it with a note
+- [ ] Tick "drain clogged" (photo optional); the issue appears in **Issues**; resolve it with a note
+- [ ] Record 2 water pipe leakages, then 1 and 2 leakages fixed: the leak issue count drops to 1, then closes
+- [ ] Report issue: Report stays grey until a remark is written; it sends without a photo
 - [ ] Propose a manhole and a pipe; Commissioner approves the manhole, then the pipe
 - [ ] Switch the phone to airplane mode, save an update, switch back: it is sent automatically
 - [ ] Log labour for today

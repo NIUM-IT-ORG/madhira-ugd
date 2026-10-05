@@ -104,6 +104,10 @@ export function registerUserRoutes(app, db) {
     const u = (await db.query('select * from users where id = $1', [req.params.id])).rows[0];
     if (!u) return reply.code(404).send({ error: 'User not found.' });
     const d = body.data;
+    if (d.email && d.email.toLowerCase() !== u.email) {
+      const taken = (await db.query('select 1 from users where email = $1 and id <> $2', [d.email.toLowerCase(), u.id])).rows[0];
+      if (taken) return reply.code(409).send({ error: 'Another user already has this email.' });
+    }
     if (u.id === req.user.id && (d.role && d.role !== 'admin' || d.active === false)) {
       return reply.code(400).send({ error: 'You cannot remove your own admin access.' });
     }
@@ -121,12 +125,16 @@ export function registerUserRoutes(app, db) {
       vals.push(await hashPassword(pw));
       sets.push(`password_hash = $${vals.length}`, 'must_change_password = true');
     }
-    // Signing out existing sessions when access is reduced or the password is reset.
-    if (d.reset_password || d.active === false || d.role) sets.push('token_version = token_version + 1');
+    // Sign out existing sessions only when access really changes or the password is reset (the edit form always
+    // sends the role, so compare it).
+    const signOut = d.reset_password || (d.active === false && u.active) || (d.role && d.role !== u.role);
+    if (signOut) sets.push('token_version = token_version + 1');
     if (!sets.length) return { user: publicUser(u) };
     vals.push(u.id);
     const r = await db.query(`update users set ${sets.join(', ')} where id = $${vals.length} returning *`, vals);
     app.forgetUser(u.id);
+    // Editing your own entry keeps you signed in.
+    if (signOut && u.id === req.user.id) app.issueSession(reply, r.rows[0]);
     const { reset_password, ...logged } = d;
     await audit(db, req, reset_password ? 'user_password_reset' : 'user_update', 'user', u.id, logged);
     publish({ entity: 'user', id: u.id, action: 'update' });

@@ -73,10 +73,25 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const timer = useRef<number | undefined>(undefined)
   useEffect(() => {
     if (!user) return
-    const es = new EventSource('/api/events')
-    es.onopen = () => setLive(true)
-    es.onerror = () => setLive(false)
-    es.onmessage = (m) => {
+    // Reconnects: after a gap (screen locked, signal lost, server upgraded) reload everything, because the
+    // events sent meanwhile are not replayed. A stream the browser gave up on is reopened after 5 s.
+    let es: EventSource
+    let first = true
+    let retry: number | undefined
+    const connect = () => {
+      es = new EventSource('/api/events')
+      es.onopen = () => {
+        setLive(true)
+        if (!first) reload().catch(() => undefined)
+        first = false
+      }
+      es.onerror = () => {
+        setLive(false)
+        if (es.readyState === EventSource.CLOSED) retry = window.setTimeout(connect, 5000)
+      }
+      es.onmessage = onMessage
+    }
+    const onMessage = (m: MessageEvent) => {
       const e = JSON.parse(m.data) as LiveEvent
       setLastEvent(e)
       const map: Record<string, Part[]> = {
@@ -91,7 +106,22 @@ export function DataProvider({ children }: { children: ReactNode }) {
         reload(...parts).catch(() => undefined)
       }, 300)
     }
-    return () => es.close()
+    connect()
+    const onVisible = () => { if (document.visibilityState === 'visible') reload().catch(() => undefined) }
+    // A page kept in the browser's back/forward memory must not hold its live connection open: browsers allow
+    // only 6 connections per site over plain HTTP, and a 7th page load would wait for one.
+    const onHide = () => { window.clearTimeout(retry); es.close() }
+    const onShow = (e: PageTransitionEvent) => { if (e.persisted) { first = false; connect() } }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('pagehide', onHide)
+    window.addEventListener('pageshow', onShow)
+    return () => {
+      window.clearTimeout(retry)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('pagehide', onHide)
+      window.removeEventListener('pageshow', onShow)
+      es.close()
+    }
   }, [user, reload])
 
   const idx = useMemo(() => (geo ? buildIndexes(geo) : null), [geo])

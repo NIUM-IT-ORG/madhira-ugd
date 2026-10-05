@@ -12,6 +12,7 @@
 | jsonwebtoken | 9.0 | MIT |
 | zod | 4.6 | MIT |
 | exceljs | 4.4 | MIT |
+| yazl (zip archives on the Storage page) | 3.3 | MIT |
 | React, React DOM | 19.3 | MIT |
 | MapLibre GL JS | 6.11 | BSD-3-Clause |
 | PMTiles (JavaScript) | 4.5 | BSD-3-Clause |

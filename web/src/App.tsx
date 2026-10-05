@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import LabourForm from './components/LabourForm'
+import OutboxSheet from './components/OutboxSheet'
 import { useToast } from './components/ui'
 import { AuthProvider, roleLabel, useAuth } from './lib/auth'
-import { useOutbox } from './lib/outbox'
+import { isMine, setOutboxUser, useOutbox } from './lib/outbox'
 import { DataProvider, useData } from './lib/store'
 import type { Selection } from './lib/types'
 import ActivityPage from './pages/ActivityPage'
@@ -12,9 +13,10 @@ import IssuesPage from './pages/IssuesPage'
 import { ChangePasswordPage, LoginPage } from './pages/Login'
 import MapPage from './pages/MapPage'
 import UsersPage from './pages/UsersPage'
+import StoragePage from './pages/StoragePage'
 
-type Route = 'map' | 'dashboard' | 'issues' | 'approvals' | 'activity' | 'users' | 'account'
-const ROUTES: Route[] = ['map', 'dashboard', 'issues', 'approvals', 'activity', 'users', 'account']
+type Route = 'map' | 'dashboard' | 'issues' | 'approvals' | 'activity' | 'users' | 'storage' | 'account'
+const ROUTES: Route[] = ['map', 'dashboard', 'issues', 'approvals', 'activity', 'users', 'storage', 'account']
 const routeOf = (path: string): Route => {
   const r = path.replace(/^\/+/, '').split('/')[0] as Route
   return ROUTES.includes(r) ? r : 'map'
@@ -27,8 +29,11 @@ function Shell() {
   const [focus, setFocus] = useState<Selection>(null)
   const [menu, setMenu] = useState(false)
   const [labour, setLabour] = useState(false)
+  const [outboxOpen, setOutboxOpen] = useState(false)
   const toast = useToast()
-  const outbox = useOutbox((n) => {
+  // Saves on this phone are sent only for the person who made them.
+  setOutboxUser(user ? { id: user.id, name: user.name } : null)
+  const { items: outbox, flushNow } = useOutbox((n) => {
     toast.show(`${n} saved update${n > 1 ? 's' : ''} sent from this phone.`)
     reload()
   })
@@ -60,12 +65,19 @@ function Shell() {
 
   if (!user) return null
   const isAdmin = user.role === 'admin'
+  // Admin-only pages opened by others (e.g. an old link) show the map instead of a blank page.
+  const view: Route = !isAdmin && (route === 'users' || route === 'storage') ? 'map' : route
   const openIssues = issues.filter((i) => i.status !== 'resolved').length
   const waiting = isAdmin
     ? requests.filter((r) => r.status === 'pending').length + stretches.features.filter((f) => f.properties.stage === 'awaiting_approval' && f.properties.approval === 'pending').length
     : requests.filter((r) => r.status === 'pending' && r.requested_by === user.id).length
-  const queued = outbox.filter((o) => !o.error).length
-  const failed = outbox.filter((o) => o.error).length
+  const mine = outbox.filter(isMine)
+  const queued = mine.filter((o) => !o.error).length
+  const failed = mine.filter((o) => o.error).length
+  const signOut = () => {
+    if (queued && !confirm(`${queued} update${queued > 1 ? 's are' : ' is'} still waiting to be sent from this phone. They will be sent when you sign in again. Sign out anyway?`)) return
+    logout()
+  }
 
   const tabs: { r: Route; label: string; badge?: number; admin?: boolean }[] = [
     { r: 'map', label: 'Map' },
@@ -74,6 +86,7 @@ function Shell() {
     { r: 'approvals', label: isAdmin ? 'Approvals' : 'My requests', badge: waiting },
     { r: 'activity', label: 'Activity' },
     { r: 'users', label: 'Users', admin: true },
+    { r: 'storage', label: 'Storage', admin: true },
   ]
 
   return (
@@ -88,16 +101,16 @@ function Shell() {
         </div>
         <nav className="tabs">
           {tabs.filter((t) => !t.admin || isAdmin).map((t) => (
-            <a key={t.r} href={`/${t.r === 'map' ? '' : t.r}`} className={route === t.r ? 'on' : ''} onClick={(e) => { e.preventDefault(); go(t.r) }}>
+            <a key={t.r} href={`/${t.r === 'map' ? '' : t.r}`} className={view === t.r ? 'on' : ''} onClick={(e) => { e.preventDefault(); go(t.r) }}>
               {t.label}{t.badge ? <span className="badge">{t.badge}</span> : null}
             </a>
           ))}
         </nav>
         <div className="top-right">
           {(queued > 0 || failed > 0) && (
-            <span className={`outbox ${failed ? 'bad' : ''}`} title={failed ? outbox.filter((o) => o.error).map((o) => `${o.label}: ${o.error}`).join('\n') : 'Waiting for signal'}>
+            <button className={`outbox ${failed ? 'bad' : ''}`} onClick={() => setOutboxOpen(true)} title="Saves kept on this phone">
               {queued ? `${queued} waiting to send` : ''}{failed ? ` ${failed} not accepted` : ''}
-            </span>
+            </button>
           )}
           <span className={`live-dot ${live ? 'on' : ''}`} title={live ? 'Live updates on' : 'Reconnecting…'} />
           <button className="user-btn" onClick={() => setMenu(!menu)} aria-expanded={menu}>
@@ -114,21 +127,23 @@ function Shell() {
               </nav>
               {user.role !== 'viewer' && <button onClick={() => { setMenu(false); setLabour(true) }}>Log labour</button>}
               <button onClick={() => go('account')}>Change password</button>
-              <button onClick={logout}>Sign out</button>
+              <button onClick={signOut}>Sign out</button>
             </div>
           )}
         </div>
       </header>
       <main className="main">
         {/* The map stays mounted so switching pages is instant. */}
-        <div className={`route ${route === 'map' ? 'shown' : 'hidden'}`}><MapPage toast={toast.show} focus={focus} /></div>
-        {route === 'dashboard' && <div className="route shown scroll"><DashboardPage onShow={show} /></div>}
-        {route === 'issues' && <div className="route shown scroll"><IssuesPage onShow={show} /></div>}
-        {route === 'approvals' && <div className="route shown scroll"><ApprovalsPage onShow={show} toast={toast.show} /></div>}
-        {route === 'activity' && <div className="route shown scroll"><ActivityPage onShow={show} /></div>}
-        {route === 'users' && isAdmin && <div className="route shown scroll"><UsersPage toast={toast.show} /></div>}
-        {route === 'account' && <div className="route shown scroll"><ChangePasswordPage onDone={() => go('map')} /></div>}
+        <div className={`route ${view === 'map' ? 'shown' : 'hidden'}`}><MapPage toast={toast.show} focus={focus} /></div>
+        {view === 'dashboard' && <div className="route shown scroll"><DashboardPage onShow={show} /></div>}
+        {view === 'issues' && <div className="route shown scroll"><IssuesPage onShow={show} /></div>}
+        {view === 'approvals' && <div className="route shown scroll"><ApprovalsPage onShow={show} toast={toast.show} /></div>}
+        {view === 'activity' && <div className="route shown scroll"><ActivityPage onShow={show} /></div>}
+        {view === 'users' && isAdmin && <div className="route shown scroll"><UsersPage toast={toast.show} /></div>}
+        {view === 'storage' && isAdmin && <div className="route shown scroll"><StoragePage toast={toast.show} /></div>}
+        {view === 'account' && <div className="route shown scroll"><ChangePasswordPage onDone={() => go('map')} /></div>}
       </main>
+      {outboxOpen && <OutboxSheet items={outbox} onFlush={flushNow} onClose={() => setOutboxOpen(false)} />}
       {labour && <LabourForm onClose={() => setLabour(false)} onDone={(m) => toast.show(m)} />}
       {toast.node}
     </div>

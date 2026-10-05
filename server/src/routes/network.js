@@ -78,6 +78,13 @@ async function buildRequest(q, user, body) {
     const a = manholeCoord(d.from, pending);
     const b = manholeCoord(d.to, pending);
     if (!a || !b) throw { code: 400, body: { error: 'Both manholes must exist on the map or be proposed first.' } };
+    // One pipe between two manholes: refuse a second one (also a double tap on Send).
+    const joins = (p) => (p.from === d.from && p.to === d.to) || (p.from === d.to && p.to === d.from);
+    const existing = [...network.pipes.values()].find((f) => joins(f.properties));
+    if (existing) throw { code: 409, body: { error: `Pipe ${existing.properties.id} already joins these manholes.` } };
+    const twin = (await q.query("select code, payload from change_requests where entity = 'pipe' and action = 'add' and status = 'pending'")).rows
+      .find((r) => joins(r.payload?.properties ?? {}));
+    if (twin) throw { code: 409, body: { error: `Request ${twin.code} for a pipe between these manholes is already waiting.` } };
     const geomLen = distanceM(a.coord, b.coord);
     if (geomLen > 500) throw { code: 400, body: { error: `The manholes are ${Math.round(geomLen)} m apart; pipes between manholes are normally under 100 m.` } };
     const mid = [(a.coord[0] + b.coord[0]) / 2, (a.coord[1] + b.coord[1]) / 2];
@@ -136,12 +143,29 @@ async function execute(q, user, cr) {
       await softDeleteStretch(q, user.id, s, `Removed: request ${cr.code} approved.`);
     }
   } else if (cr.action === 'add') {
-    if (cr.entity === 'pipe') {
-      for (const end of [cr.payload.properties.from, cr.payload.properties.to]) {
-        if (!network.manholes.has(end)) throw { code: 400, body: { error: `Approve the request that adds manhole ${end.split('/')[1]} first.` } };
-      }
+    let { geometry, properties } = cr.payload;
+    if (cr.entity === 'manhole' && network.manholes.has(cr.target_id)) {
+      throw { code: 409, body: { error: `${properties.label} already exists in Zone ${properties.zone}. Reject this request.` } };
     }
-    await addEdit(cr.entity, cr.target_id, 'add', cr.payload.geometry, cr.payload.properties);
+    if (cr.entity === 'pipe') {
+      const ends = [properties.from, properties.to];
+      for (const end of ends) {
+        if (network.manholes.has(end)) continue;
+        const waiting = (await q.query("select code from change_requests where entity = 'manhole' and action = 'add' and target_id = $1 and status = 'pending'", [end])).rows[0];
+        throw { code: 400, body: { error: waiting ? `Approve request ${waiting.code}, which adds manhole ${end.split('/')[1]}, first.` : `Manhole ${end.split('/')[1]} is not on the map (it was rejected or removed). Reject this request.` } };
+      }
+      const joins = (p) => (p.from === ends[0] && p.to === ends[1]) || (p.from === ends[1] && p.to === ends[0]);
+      const dupe = [...network.pipes.values()].find((f) => joins(f.properties));
+      if (dupe) throw { code: 409, body: { error: `Pipe ${dupe.properties.id} already joins these manholes. Reject this request.` } };
+      // Draw the pipe between the manholes as they are now: a proposed manhole may have been re-proposed elsewhere.
+      const [ca, cb] = ends.map((e) => network.manholes.get(e).geometry.coordinates);
+      const moved = Math.max(distanceM(ca, geometry.coordinates[0]), distanceM(cb, geometry.coordinates[1]));
+      if (moved > 5) throw { code: 409, body: { error: `A manhole of this pipe is now ${Math.round(moved)} m from where it was when the pipe was proposed. Reject this request and propose the pipe again.` } };
+      const len = Math.round(distanceM(ca, cb) * 10) / 10;
+      geometry = { type: 'LineString', coordinates: [ca, cb] };
+      properties = { ...properties, len_geom_m: len, length_m: properties.len_label_m ?? len };
+    }
+    await addEdit(cr.entity, cr.target_id, 'add', geometry, properties);
   } else {
     const map = cr.entity === 'pipe' ? network.pipes : network.manholes;
     if (!map.has(cr.target_id)) throw { code: 409, body: { error: 'This feature has already been removed.' } };
@@ -156,6 +180,8 @@ const listSql = `
   from change_requests c left join users ru on ru.id = c.requested_by left join users du on du.id = c.decided_by`;
 
 export async function createChangeRequest(q, user, body) {
+  // One request at a time, so two at once (a double tap, two phones) cannot both pass the duplicate checks.
+  await q.query("select pg_advisory_xact_lock(hashtext('change_requests'))");
   const built = await buildRequest(q, user, body);
   if (!canEditWard(user, built.ward)) throw { code: 403, body: { error: `Ward ${built.ward} is not assigned to you.` } };
   const dup = (await q.query(
@@ -172,12 +198,29 @@ export async function createChangeRequest(q, user, body) {
   return r.rows[0];
 }
 
+/** A proposed stretch that will not be added (rejected or withdrawn): hidden, its issues closed, out of the figures. */
+async function dropProposedStretch(q, user, cr, why) {
+  const s = (await q.query('select * from stretches where id = $1 and deleted_at is null for update', [cr.target_id])).rows[0];
+  await q.query("update stretches set record_state = 'rejected', updated_at = now() where id = $1", [cr.target_id]);
+  if (s) await softDeleteStretch(q, user.id, s, why);
+}
+
+/** Pipe proposals that depend on a manhole proposal that will not happen are closed with it. */
+async function closeDependentPipes(q, user, cr, status) {
+  if (cr.entity !== 'manhole' || cr.action !== 'add') return;
+  await q.query(
+    `update change_requests set status = $1, decided_by = $2, decided_at = now(), decision_note = $3
+     where entity = 'pipe' and action = 'add' and status = 'pending'
+       and (payload->'properties'->>'from' = $4 or payload->'properties'->>'to' = $4)`,
+    [status === 'withdrawn' ? 'withdrawn' : 'rejected', user.id, `Manhole ${cr.payload?.properties?.label ?? cr.target_id} was ${status}.`, cr.target_id],
+  );
+}
+
 async function decide(q, user, cr, to, note) {
   let edits = [];
   if (to === 'approved') edits = await execute(q, user, cr);
-  if (to === 'rejected' && cr.entity === 'stretch' && cr.action === 'add') {
-    await q.query("update stretches set record_state = 'rejected', updated_at = now() where id = $1", [cr.target_id]);
-  }
+  if (to === 'rejected' && cr.entity === 'stretch' && cr.action === 'add') await dropProposedStretch(q, user, cr, `Not added: request ${cr.code} rejected.`);
+  if (to === 'rejected') await closeDependentPipes(q, user, cr, 'rejected');
   await q.query('update change_requests set status = $1, decided_by = $2, decided_at = now(), decision_note = $3 where id = $4', [to, user.id, note ?? null, cr.id]);
   return edits;
 }
@@ -230,8 +273,11 @@ export function registerNetworkRoutes(app, db) {
   });
 
   async function act(req, reply, to) {
-    const note = z.object({ note: z.string().trim().max(2000).optional().nullable() }).parse(req.body ?? {}).note;
+    const parsed = z.object({ note: z.string().trim().max(2000).optional().nullable() }).safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'The note must be text of at most 2,000 characters.' });
+    const note = parsed.data.note;
     if (to === 'rejected' && !note) return reply.code(400).send({ error: 'Give a reason for rejecting.' });
+    if (!z.string().uuid().safeParse(req.params.id).success) return reply.code(404).send({ error: 'Request not found.' });
     try {
       let edits = [];
       const cr = await db.tx(async (q) => {
@@ -240,9 +286,8 @@ export function registerNetworkRoutes(app, db) {
         if (c.status !== 'pending') throw { code: 400, body: { error: `This request is already ${c.status}.` } };
         if (to === 'withdrawn') {
           if (c.requested_by !== req.user.id && req.user.role !== 'admin') throw { code: 403, body: { error: 'Only the person who asked can withdraw it.' } };
-          if (c.entity === 'stretch' && c.action === 'add') {
-            await q.query("update stretches set record_state = 'rejected', updated_at = now() where id = $1", [c.target_id]);
-          }
+          if (c.entity === 'stretch' && c.action === 'add') await dropProposedStretch(q, req.user, c, `Not added: request ${c.code} withdrawn.`);
+          await closeDependentPipes(q, req.user, c, 'withdrawn');
           await q.query("update change_requests set status = 'withdrawn', decided_by = $1, decided_at = now(), decision_note = $2 where id = $3", [req.user.id, note ?? null, c.id]);
         } else {
           edits = await decide(q, req.user, c, to, note);

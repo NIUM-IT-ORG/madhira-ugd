@@ -102,8 +102,13 @@ export function registerAuth(app, db) {
 
   // Cross-site request guard: state-changing API calls must carry the app's own header, which a form
   // post from another site cannot set. Together with SameSite=Lax cookies this blocks CSRF.
+  // Decoded path: '/%61pi/…' must not slip past checks that look for '/api/'.
+  app.decorate('decodedPath', (req) => {
+    const p = req.url.split('?')[0];
+    try { return decodeURIComponent(p) } catch { return p }
+  });
   app.addHook('onRequest', async (req, reply) => {
-    if (req.method === 'GET' || req.method === 'HEAD' || !req.url.startsWith('/api/')) return;
+    if (req.method === 'GET' || req.method === 'HEAD' || !app.decodedPath(req).startsWith('/api/')) return;
     if (req.headers['x-ugd'] !== '1') return reply.code(403).send({ error: 'Missing request header.' });
   });
 }

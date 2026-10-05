@@ -51,7 +51,7 @@ const bulkBody = z.object({
 
 const STATUS_PATHS = new Set([
   'sewer.pipeline', 'sewer.pipe_laid_m', 'sewer.manholes_built', 'sewer.ics_built', 'excavation.stage', 'excavation.cut_length_m',
-  'restoration.stage', 'motorable', 'utilities.taps_broken', 'utilities.taps_restored', 'utilities.water_leaks',
+  'restoration.stage', 'motorable', 'utilities.taps_broken', 'utilities.taps_restored', 'utilities.water_leaks', 'utilities.water_leaks_fixed',
   'utilities.drain_clogged', 'hazards.water_stagnation', 'hazards.potholes', 'hazards.uneven_backfill',
 ]);
 const ENUMS = {
@@ -60,6 +60,7 @@ const ENUMS = {
   'restoration.stage': ['not_due', 'pending', 'restored_curing_pending', 'restored_curing_done'],
   motorable: ['yes', 'difficult', 'no'],
 };
+const LINKED_PATHS = [['utilities.taps_broken', 'utilities.taps_restored'], ['utilities.water_leaks', 'utilities.water_leaks_fixed']];
 const BOOLS = new Set(['utilities.drain_clogged', 'hazards.water_stagnation', 'hazards.uneven_backfill']);
 const NULLABLE = new Set(['sewer.pipe_laid_m', 'excavation.cut_length_m']);
 
@@ -94,6 +95,7 @@ function rowToFeature(r) {
       pipe_ids: r.pipe_ids, status: normaliseStatus(r.status), approval: r.approval, stage: r.stage, open_issues: r.open_issues,
       version: r.version, record_state: r.record_state, created_at: r.created_at, updated_at: r.updated_at, updated_by: r.updated_by,
       updated_by_name: r.updated_by_name ?? null, flagged_far: r.flagged_far ?? false, approved_at: r.approved_at,
+      outside_ward: !wardOfGeometry(r.geometry).inside,
     },
   };
 }
@@ -169,6 +171,19 @@ async function insertVersion(q, v) {
   );
 }
 
+/** A pipe belongs to one road stretch: refuse pipes already in another live stretch (lengths would count twice). */
+async function assertPipesFree(q, pipeIds, selfId = null) {
+  if (!pipeIds.length) return;
+  const other = (await q.query(
+    `select code, pipe_ids from stretches where deleted_at is null and record_state <> 'rejected' and pipe_ids && $1::text[]
+       and ($2::uuid is null or id <> $2::uuid) limit 1`, [pipeIds, selfId],
+  )).rows[0];
+  if (other) {
+    const shared = pipeIds.filter((p) => other.pipe_ids.includes(p));
+    throw { code: 409, body: { error: `Pipe ${shared.slice(0, 3).join(', ')} is already in stretch ${other.code}. Leave it out, or change ${other.code}.` } };
+  }
+}
+
 /** Apply status changes to one stretch inside a transaction. Throws {code, body} for client errors. */
 async function applyUpdate(q, user, s, input) {
   const current = normaliseStatus(s.status);
@@ -184,6 +199,7 @@ async function applyUpdate(q, user, s, input) {
     pipeIds = knownPipes(input.pipe_ids ?? []);
     ({ ward, zone } = wardOfGeometry(geom));
     if (!canEditWard(user, ward)) throw { code: 403, body: { error: `The new line lies in ward ${ward}, which is not assigned to you.` } };
+    await assertPipesFree(q, pipeIds, s.id);
   }
   const nameChanged = input.name !== undefined && (input.name || null) !== (s.name || null);
   if (!diff.length && !geomChanged && !nameChanged && !input.note && !input.photos.length) {
@@ -194,7 +210,11 @@ async function applyUpdate(q, user, s, input) {
   // A rollback restores recorded data, so the rule asking for new photo evidence does not apply to it.
   const check = checkStatus(next, { length_m: length, planned_mh: planned, has_photo: input.photos.length > 0 || !!input.restoring, previous: current });
   if (check.errors.length) throw { code: 400, body: { error: check.errors.join(' '), errors: check.errors, stretch: s.code } };
-  const approval = nextApproval(s.approval, next);
+  let approval = nextApproval(s.approval, next);
+  // A rejected restoration recorded again with new photo evidence goes back to the Commissioner.
+  if (approval === 'rejected' && input.photos.length > 0 && !input.restoring) approval = 'pending';
+  // A redrawn line is not the road that was approved: it needs approving again.
+  if (geomChanged && approval === 'approved') approval = 'pending';
   const stage = deriveStage(next, approval);
   const version = s.version + 1;
   const g = gpsCheck(input.gps, geom);
@@ -267,6 +287,8 @@ export function registerStretchRoutes(app, db) {
     try {
       const out = await db.tx(async (q) => {
         if (!(await photosExist(q, d.photos))) throw { code: 400, body: { error: 'A photo could not be found; upload it again.' } };
+        await q.query("select pg_advisory_xact_lock(hashtext('stretch-pipes'))");
+        await assertPipesFree(q, pipeIds);
         const seq = await nextCounter(q, `stretch-w${ward}`);
         const code = `W${ward}-${String(seq).padStart(3, '0')}`;
         const approval = nextApproval('none', status);
@@ -321,8 +343,16 @@ export function registerStretchRoutes(app, db) {
           // Someone saved in between. Accept if they touched other fields; refuse if the same field changed.
           const later = (await q.query('select changes, user_id from stretch_versions where stretch_id = $1 and version > $2', [s.id, d.base_version])).rows;
           const touched = new Set(later.flatMap((v) => v.changes.map((c) => c.path)));
+          // Counters that must agree (restored ≤ broken, fixed ≤ leaks) count as one field.
+          for (const [a, b] of LINKED_PATHS) if (touched.has(a) || touched.has(b)) { touched.add(a); touched.add(b) }
           const clash = d.changes.filter((c) => touched.has(c.path)).map((c) => c.path);
-          if (clash.length || (d.geometry && touched.has('geometry'))) {
+          if (d.name !== undefined && touched.has('name')) clash.push('name');
+          // The Commissioner approved or rejected the restoration meanwhile: a restoration edit must see that first.
+          if (touched.has('approval') && d.changes.some((c) => c.path.startsWith('restoration.'))) clash.push('approval');
+          // Older history may have been deleted on the Storage page: if we cannot see every change since the
+          // editor's version, we cannot tell what they would overwrite, so ask them to review.
+          const missing = later.length < s.version - d.base_version;
+          if (missing || clash.length || (d.geometry && touched.has('geometry'))) {
             throw { code: 409, body: { error: 'Someone else changed this stretch while you were editing. Review the latest values and save again.', fields: clash, version: s.version } };
           }
         }
@@ -344,6 +374,7 @@ export function registerStretchRoutes(app, db) {
     const d = body.data;
     const problems = changeProblems(d.changes);
     if (problems.length) return reply.code(400).send({ error: problems.join(' ') });
+    if (!(await photosExist(db, d.photos))) return reply.code(400).send({ error: 'A photo could not be found; upload it again.' });
     const batch = crypto.randomUUID();
     const results = [];
     for (const id of d.ids) {
@@ -366,7 +397,9 @@ export function registerStretchRoutes(app, db) {
   });
 
   async function setApproval(req, reply, to) {
-    const note = z.object({ note: z.string().trim().max(2000).optional().nullable() }).parse(req.body ?? {}).note;
+    const parsed = z.object({ note: z.string().trim().max(2000).optional().nullable() }).safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'The note must be text of at most 2,000 characters.' });
+    const note = parsed.data.note;
     if (to === 'rejected' && !note) return reply.code(400).send({ error: 'Give a reason for rejecting.' });
     try {
       const out = await db.tx(async (q) => {
@@ -400,7 +433,9 @@ export function registerStretchRoutes(app, db) {
 
   // Roll a stretch back to an earlier version's status (recorded as a new version; history is never lost).
   app.post('/api/stretches/:id/revert', admin, async (req, reply) => {
-    const { version: target } = z.object({ version: z.number().int().positive() }).parse(req.body ?? {});
+    const parsed = z.object({ version: z.number().int().positive() }).safeParse(req.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Choose the version to roll back to.' });
+    const target = parsed.data.version;
     try {
       const out = await db.tx(async (q) => {
         const s = (await q.query('select * from stretches where id = $1 and deleted_at is null for update', [req.params.id])).rows[0];

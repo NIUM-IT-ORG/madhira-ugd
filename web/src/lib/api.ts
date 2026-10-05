@@ -14,8 +14,8 @@ export const isNetworkError = (e: unknown) => e instanceof TypeError || (e insta
 let onUnauthorised: (() => void) | null = null
 export const setUnauthorisedHandler = (fn: () => void) => (onUnauthorised = fn)
 
-export async function api<T = Record<string, unknown>>(method: string, url: string, body?: unknown): Promise<T> {
-  const headers: Record<string, string> = { 'x-ugd': '1' }
+export async function api<T = Record<string, unknown>>(method: string, url: string, body?: unknown, extra: Record<string, string> = {}): Promise<T> {
+  const headers: Record<string, string> = { 'x-ugd': '1', ...extra }
   let payload: BodyInit | undefined
   if (body instanceof FormData) payload = body
   else if (body !== undefined) {
@@ -64,7 +64,7 @@ export interface PhotoMeta {
   taken_at?: string
 }
 
-export async function uploadPhoto(blob: Blob, meta: PhotoMeta): Promise<string> {
+export async function uploadPhoto(blob: Blob, meta: PhotoMeta, key?: string): Promise<string> {
   const fd = new FormData()
   // Fields first: the server reads them before the file part.
   if (meta.lat != null) fd.append('lat', String(meta.lat))
@@ -72,7 +72,7 @@ export async function uploadPhoto(blob: Blob, meta: PhotoMeta): Promise<string> 
   if (meta.accuracy != null) fd.append('accuracy', String(meta.accuracy))
   fd.append('taken_at', meta.taken_at ?? new Date().toISOString())
   fd.append('file', blob, 'photo.jpg')
-  const r = await api<{ id: string }>('POST', '/api/photos', fd)
+  const r = await api<{ id: string }>('POST', '/api/photos', fd, key ? { 'x-idempotency-key': key } : {})
   return r.id
 }
 

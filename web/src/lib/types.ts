@@ -120,6 +120,7 @@ export interface StretchProps {
   updated_by_name: string | null
   flagged_far: boolean
   approved_at: string | null
+  outside_ward?: boolean // lies outside the KML ward outlines; the nearest ward is used
 }
 export interface StretchFeature {
   type: 'Feature'

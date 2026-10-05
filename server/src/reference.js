@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config } from './config.js';
-import { inPolygon, distanceToLineM, distanceM, midpoint } from '../../shared/geo.ts';
+import { distanceM, midpoint, wardAt as wardOfPoint } from '../../shared/geo.ts';
 
 /**
  * Reference data: wards and the sewer network. The network starts as extracted from the plans
@@ -60,16 +60,9 @@ export function networkCollections() {
   };
 }
 
-/** Ward (and its zone) containing the point, else the nearest ward. */
+/** Ward (and its zone) containing the point, else the nearest ward (inside: false). */
 export function wardAt(p) {
-  for (const w of wards) if (inPolygon(p, w.geometry)) return { ward: w.properties.ward, zone: w.properties.zone, inside: true };
-  let best = null;
-  for (const w of wards) {
-    const ring = { type: 'LineString', coordinates: w.geometry.coordinates[0] };
-    const d = distanceToLineM(p, ring);
-    if (!best || d < best.d) best = { d, ward: w.properties.ward, zone: w.properties.zone };
-  }
-  return { ward: best.ward, zone: best.zone, inside: false };
+  return wardOfPoint(p, wards);
 }
 
 export function wardOfGeometry(g) {

@@ -5,6 +5,12 @@ call needs the session cookie set by `POST /api/auth/login`. Every `POST`, `PATC
 the header `x-ugd: 1`. Errors return `{ "error": "message" }` with HTTP 400 (invalid), 401 (not signed in),
 403 (not allowed / password change pending), 404, 409 (conflict) or 429 (too many sign-in attempts).
 
+## Saves sent twice
+
+`POST` and `PATCH` may carry `x-idempotency-key: <unique id>` (the phone app sends one per saved update and per
+photo). If the same signed-in user sends the same key again, the first answer is returned and nothing is saved
+twice (keys kept 30 days, table `request_keys`).
+
 ## Sign-in and users
 
 | Method and path | Who | Purpose |
@@ -42,7 +48,7 @@ the header `x-ugd: 1`. Errors return `{ "error": "message" }` with HTTP 400 (inv
 | Method and path | Who | Purpose |
 | --- | --- | --- |
 | `GET /api/issues`, `GET /api/issues/:id` | signed in | List / one with events |
-| `POST /api/issues` `{kind, location, stretch_id?, count, severity?, description, photos}` | editor (ward), admin | Report (photo required) |
+| `POST /api/issues` `{kind, location, stretch_id?, count, severity?, description, photos?}` | editor (ward), admin | Report (`description` = remark, required; photos optional) |
 | `PATCH /api/issues/:id` `{status?, assigned_to?, due_date?, severity?, note, photos}` | editor (ward), admin | Assign / resolve (note required) / re-open |
 
 ## Change requests (network)
@@ -66,6 +72,20 @@ Manhole `payload`: `{lon, lat, label, gl?, il?}`. Pipe `payload`: `{from, to, di
 | `GET /api/labour`, `POST /api/labour` `{log_date, ward, labourers, machines, note}` | Labour log |
 | `GET /api/stats/timeline` | Weekly field figures for the dashboard |
 | `GET /api/export/progress.xlsx` | Excel workbook (progress sheet + detail sheets) |
+| `GET /api/export/issues.xlsx?kind=&zone=&ward=&severity=&status=` | Issues only, filtered as on the Issues page |
 | `GET /api/export/stretches.kml`, `GET /api/export/stretches.geojson` | Google Earth / GIS exports |
 | `GET /api/events` | Live updates (Server-Sent Events) |
 | `GET /api/health` | `{ok, db}` for load balancers and monitoring (no sign-in) |
+
+## Storage (Commissioner only)
+
+| Method and path | Purpose |
+| --- | --- |
+| `GET /api/admin/storage` | Usage: database size, photos (count, bytes, by month), row counts, server disk, clean-up log |
+| `POST /api/admin/storage/preview` `{categories, before}` | Exact counts and photo bytes a clean-up would delete (dry run, nothing changes) |
+| `GET /api/admin/storage/archive?categories=a,b&before=YYYY-MM-DD` | Zip: `records.xlsx` (every record to be deleted) + `photos/` |
+| `POST /api/admin/storage/purge` `{categories, before, confirm: "DELETE"}` | Delete; recorded in `storage_purges` |
+
+Categories: `photos`, `history`, `resolved_issues`, `requests`, `removed_stretches`, `labour`, `audit`, `cleanup_log`.
+`before` is a day in India time (everything before 00:00 IST of that day). Photos that nothing refers to after
+the deletion are removed too (`unused_photos` in the summary).

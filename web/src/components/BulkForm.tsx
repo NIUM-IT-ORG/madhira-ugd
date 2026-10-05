@@ -31,7 +31,7 @@ export default function BulkForm({ ids, codes, onClose, onSaved }: { ids: string
     drain !== '__keep' && { path: 'utilities.drain_clogged', to: drain === 'yes' },
     stagnation !== '__keep' && { path: 'hazards.water_stagnation', to: stagnation === 'yes' },
   ].filter(Boolean) as Choice[]
-  const needsPhotoNote = restoration.startsWith('restored') || drain === 'yes' || stagnation === 'yes'
+  const needsPhotoNote = restoration.startsWith('restored')
   const yesNo = [KEEP, { v: 'yes', label: 'Yes' }, { v: 'no', label: 'No' }]
 
   return (
@@ -83,7 +83,7 @@ export default function BulkForm({ ids, codes, onClose, onSaved }: { ids: string
           <Field label="E · Drain clogged with gravel"><Seg small value={drain} options={yesNo} onChange={setDrain} /></Field>
           <Field label="F · Water stagnation"><Seg small value={stagnation} options={yesNo} onChange={setStagnation} /></Field>
           <Field label="Note (optional)"><textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
-          {needsPhotoNote && <div className="form-warn">Restoration claims and new damage need a photo per stretch, so record those one stretch at a time. Stretches without a photo will be skipped.</div>}
+          {needsPhotoNote && <div className="form-warn">Marking the CC road restored needs a photo of each road, so record restoration one stretch at a time. In a bulk update it will be refused.</div>}
           {error && <div className="form-error">{error}</div>}
         </>
       )}

@@ -12,7 +12,7 @@ module.exports = function itGuide(info) {
         ['Website', '`https://<your domain>` with an automatic, free, auto-renewing TLS certificate'],
         ['Server', '1 × EC2 (Ubuntu 24.04) in Mumbai, ap-south-1, running 3 containers: PostgreSQL, the app, Caddy (HTTPS)'],
         ['Data kept in India', 'Database and photos on the server\'s encrypted disk, nightly backups, daily disk snapshots'],
-        ['Code', 'Private Git repository (GitHub, GitLab, Bitbucket or your own), tag `v1.0`, created from the package in Part A'],
+        ['Code', `Private Git repository (GitHub, GitLab, Bitbucket or your own), tag \`${info.version}\`, created from the package in Part A`],
         ['Accounts', 'Commissioner, AEE and Field Inspector, created on first start with one-time passwords (in the user guides)'],
       ] },
 
@@ -142,6 +142,9 @@ module.exports = function itGuide(info) {
       ] },
 
       { t: 'h2', text: 'B14. Updates and rollback', newPage: true },
+      { t: 'p', text: 'A new release arrives as a new zip. **If you already set up the repository from an earlier zip** (Part A), bring the new files into it on the office machine, then update the server:' },
+      { t: 'code', text: 'cd madhira-ugd                                  # the repository from Part A\nunzip ../madhira-ugd-v1.1.zip -d /tmp/ugd-new\nrsync -a --delete --exclude .git /tmp/ugd-new/madhira-ugd/ ./\ngit add -A && git commit -m "Madhira UGD Tracker v1.1"\ngit tag -a v1.1 -m "Release v1.1" && git push origin main --tags' },
+      { t: 'p', text: 'On the server:' },
       { t: 'code', text: 'cd /opt/madhira-ugd\nsh deploy/backup.sh                       # backup first\ngit fetch --tags && git checkout v1.1     # the new release tag\ndocker compose up -d --build              # database changes apply automatically\ndocker compose exec app node server/test/postdeploy-check.mjs https://<DOMAIN>\n# rollback:  git checkout v1.0 && docker compose up -d --build' },
       { t: 'h2', text: 'B15. Approximate monthly cost (ap-south-1, on-demand)' },
       { t: 'table', head: ['Item', 'Approx. USD / month'], widths: [0.65, 0.35], rows: [

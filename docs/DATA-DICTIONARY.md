@@ -68,7 +68,7 @@ One entry per progress-sheet row (Zone 2's wards 5, 6, 7 are one row): `zone`, `
 | | `excavation.cut_length_m` | number |
 | C CC restoration | `restoration.stage` | `not_due`, `pending`, `restored_curing_pending`, `restored_curing_done` |
 | D Motorability | `motorable` | `yes`, `difficult`, `no` |
-| E Utilities | `utilities.taps_broken`, `utilities.taps_restored`, `utilities.water_leaks` | integer ≥ 0 |
+| E Utilities | `utilities.taps_broken`, `utilities.taps_restored`, `utilities.water_leaks`, `utilities.water_leaks_fixed` | integer ≥ 0 (restored ≤ broken, fixed ≤ leaks; pending = the difference) |
 | | `utilities.drain_clogged` | boolean |
 | F Hazards | `hazards.water_stagnation`, `hazards.uneven_backfill` | boolean |
 | | `hazards.potholes` | integer ≥ 0 |
@@ -83,7 +83,7 @@ One entry per progress-sheet row (Zone 2's wards 5, 6, 7 are one row): `zone`, `
 | --- | --- | --- |
 | `users` | person | `email` (sign-in), `name`, `designation`, `role` (`admin`/`editor`/`viewer`), `all_wards`, `wards[]`, `active`, `must_change_password`, `password_hash` (bcrypt), `token_version` |
 | `stretches` | road stretch (current state) | `code` (W9-012), `name`, `ward`, `zone`, `geometry` (GeoJSON), `length_m`, `pipe_ids[]`, `planned_mh`, `status` (JSON, §2), `approval`, `stage`, `open_issues`, `version`, `record_state` (`proposed`/`active`/`rejected`), `deleted_at` |
-| `stretch_versions` | change to a stretch (never updated or deleted) | `stretch_id`, `version`, `kind` (create/update/bulk/approve/reject/revert/geometry/delete/issue_resolved), `user_id`, `at`, `changes` (field, from, to), `status` (full snapshot), `note`, `photos[]`, `gps`, `gps_distance_m`, `flagged_far`, `warnings`, `batch_id` |
+| `stretch_versions` | change to a stretch (never changed; older entries can be deleted by the Commissioner on the Storage page, the latest is always kept) | `stretch_id`, `version`, `kind` (create/update/bulk/approve/reject/revert/geometry/delete/issue_resolved), `user_id`, `at`, `changes` (field, from, to), `status` (full snapshot), `note`, `photos[]`, `gps`, `gps_distance_m`, `flagged_far`, `warnings`, `batch_id` |
 | `issues` | problem | `code` (I-0001), `kind`, `stretch_id`, `ward`, `location` [lon, lat], `count`, `severity`, `status` (open/assigned/resolved), `assigned_to`, `due_date`, `photos[]`, `source` (manual/stretch), reporter / resolver and times, `resolution_note` |
 | `issue_events` | change to an issue | `issue_id`, `user_id`, `at`, `action`, `changes`, `note` |
 | `photos` | uploaded photo | `path` (under `VAR_DIR/uploads`), `mime`, `bytes`, `lat`, `lng`, `accuracy`, `taken_at`, `uploaded_by` |
@@ -92,6 +92,8 @@ One entry per progress-sheet row (Zone 2's wards 5, 6, 7 are one row): `zone`, `
 | `labour_logs` | ward per day | `log_date`, `ward`, `labourers`, `machines`, `note` |
 | `audit_log` | sign-in, user and admin action | `at`, `user_id`, `action`, `entity`, `entity_id`, `detail`, `ip` |
 | `counters` | code sequence | `name`, `value` |
+| `request_keys` | answered save (30 days) | `key`, `user_id`, `status`, `body`, `at`: a resent save gets the first answer |
+| `storage_purges` | clean-up on the Storage page | `at`, `user_id`, `before_date`, `categories[]`, `summary` (rows and bytes per category), `bytes_freed` |
 
 ## 4. Files on disk
 

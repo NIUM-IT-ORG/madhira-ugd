@@ -32,6 +32,7 @@ export interface StretchStatus {
     taps_broken: number // item 14
     taps_restored: number
     water_leaks: number // item 15
+    water_leaks_fixed: number
     drain_clogged: boolean // item 16
   }
   hazards: {
@@ -47,7 +48,7 @@ export function defaultStatus(): StretchStatus {
     excavation: { stage: 'none', cut_length_m: null },
     restoration: { stage: 'not_due' },
     motorable: 'yes',
-    utilities: { taps_broken: 0, taps_restored: 0, water_leaks: 0, drain_clogged: false },
+    utilities: { taps_broken: 0, taps_restored: 0, water_leaks: 0, water_leaks_fixed: 0, drain_clogged: false },
     hazards: { water_stagnation: false, potholes: 0, uneven_backfill: false },
   }
 }
@@ -196,8 +197,10 @@ export function themeColour(theme: Theme, s: StretchStatus, approval: Approval, 
   }
 }
 
+export const tapsPending = (s: StretchStatus) => Math.max(0, s.utilities.taps_broken - s.utilities.taps_restored)
+export const leaksPending = (s: StretchStatus) => Math.max(0, s.utilities.water_leaks - s.utilities.water_leaks_fixed)
 export const utilityCount = (s: StretchStatus) =>
-  Math.max(0, s.utilities.taps_broken - s.utilities.taps_restored) + s.utilities.water_leaks + (s.utilities.drain_clogged ? 1 : 0)
+  tapsPending(s) + leaksPending(s) + (s.utilities.drain_clogged ? 1 : 0)
 export const hazardCount = (s: StretchStatus) =>
   (s.hazards.water_stagnation ? 1 : 0) + (s.hazards.potholes > 0 ? 1 : 0) + (s.hazards.uneven_backfill ? 1 : 0)
 
@@ -216,11 +219,12 @@ export function sewerCombo(s: StretchStatus, planned_mh: number): string {
 /** Tags in priority order; the map shows the first four. */
 export function deriveTags(s: StretchStatus, approval: Approval, planned_mh: number): Tag[] {
   const t: Tag[] = []
-  const taps = Math.max(0, s.utilities.taps_broken - s.utilities.taps_restored)
+  const taps = tapsPending(s)
+  const leaks = leaksPending(s)
   if (s.motorable === 'no') t.push({ key: 'not_motorable', text: 'Not motorable', tone: 'bad' })
   if (s.utilities.drain_clogged) t.push({ key: 'drain', text: 'Drain clogged', tone: 'bad' })
   if (taps > 0) t.push({ key: 'taps', text: `${taps} tap${taps > 1 ? 's' : ''} broken`, tone: 'bad' })
-  if (s.utilities.water_leaks > 0) t.push({ key: 'leak', text: `${s.utilities.water_leaks} water leak${s.utilities.water_leaks > 1 ? 's' : ''}`, tone: 'bad' })
+  if (leaks > 0) t.push({ key: 'leak', text: `${leaks} water leak${leaks > 1 ? 's' : ''}`, tone: 'bad' })
   if (s.hazards.water_stagnation) t.push({ key: 'stagnation', text: 'Water stagnation', tone: 'warn' })
   if (s.hazards.potholes > 0) t.push({ key: 'potholes', text: `${s.hazards.potholes} pothole${s.hazards.potholes > 1 ? 's' : ''}`, tone: 'warn' })
   if (s.hazards.uneven_backfill) t.push({ key: 'uneven', text: 'Uneven back-fill', tone: 'warn' })
@@ -245,8 +249,8 @@ export function deriveTags(s: StretchStatus, approval: Approval, planned_mh: num
 /** Small map badges (letters) for issues on a stretch, in display order. */
 export function badges(s: StretchStatus): string[] {
   const b: string[] = []
-  if (Math.max(0, s.utilities.taps_broken - s.utilities.taps_restored) > 0) b.push('T')
-  if (s.utilities.water_leaks > 0) b.push('L')
+  if (tapsPending(s) > 0) b.push('T')
+  if (leaksPending(s) > 0) b.push('L')
   if (s.utilities.drain_clogged) b.push('D')
   if (s.hazards.water_stagnation) b.push('W')
   if (s.hazards.potholes > 0) b.push('P')
@@ -279,8 +283,8 @@ export const issueLabel = (k: string) => ISSUE_KINDS.find((i) => i.key === k)?.l
 /** Issues a stretch's status implies, with their counts (0 = none). */
 export function impliedIssues(s: StretchStatus): Record<Exclude<IssueKind, 'other'>, number> {
   return {
-    taps_broken: Math.max(0, s.utilities.taps_broken - s.utilities.taps_restored),
-    water_leak: s.utilities.water_leaks,
+    taps_broken: tapsPending(s),
+    water_leak: leaksPending(s),
     drain_clogged: s.utilities.drain_clogged ? 1 : 0,
     water_stagnation: s.hazards.water_stagnation ? 1 : 0,
     potholes: s.hazards.potholes,
@@ -294,7 +298,7 @@ export function impliedIssues(s: StretchStatus): Record<Exclude<IssueKind, 'othe
 export interface CheckContext {
   length_m: number // stretch length on the map
   planned_mh: number // manholes on the plan within the stretch
-  has_photo: boolean // at least one photo attached to this update
+  has_photo: boolean // at least one photo attached to this update (needed only for restoration claims)
   previous?: StretchStatus
 }
 export interface CheckResult { errors: string[]; warnings: string[] }
@@ -307,7 +311,7 @@ export function checkStatus(s: StretchStatus, ctx: CheckContext): CheckResult {
   const counts: [string, number][] = [
     ['Manholes built', s.sewer.manholes_built], ['ICs built', s.sewer.ics_built],
     ['Taps broken', s.utilities.taps_broken], ['Taps restored', s.utilities.taps_restored],
-    ['Water leaks', s.utilities.water_leaks], ['Potholes', s.hazards.potholes],
+    ['Water leaks', s.utilities.water_leaks], ['Leaks fixed', s.utilities.water_leaks_fixed], ['Potholes', s.hazards.potholes],
   ]
   for (const [k, v] of counts) if (!isCount(v)) errors.push(`${k} must be a whole number of 0 or more.`)
 
@@ -322,19 +326,16 @@ export function checkStatus(s: StretchStatus, ctx: CheckContext): CheckResult {
     warnings.push(`${s.sewer.manholes_built} manholes built, but the plan shows ${ctx.planned_mh} on this stretch.`)
   }
   if (s.utilities.taps_restored > s.utilities.taps_broken) errors.push('Taps restored cannot exceed taps broken.')
+  if (s.utilities.water_leaks_fixed > s.utilities.water_leaks) errors.push('Leaks fixed cannot exceed water pipe leakages.')
   if (s.sewer.manholes_built > 0 && s.sewer.pipeline === 'not_started') warnings.push('Manholes built but pipeline marked not started.')
   if (s.restoration.stage !== 'not_due' && s.restoration.stage !== 'pending' && s.excavation.stage !== 'backfilled' && s.sewer.pipeline === 'not_started') {
     warnings.push('CC road marked restored, but no pipe laying or back-filling recorded.')
   }
   if (s.excavation.stage === 'backfilled' && s.sewer.pipeline === 'not_started') warnings.push('Trench back-filled but pipeline marked not started.')
 
-  // Evidence: restoration claims and newly reported damage need a photo.
-  const prev = ctx.previous ? impliedIssues(ctx.previous) : null
-  const now = impliedIssues(s)
-  const newDamage = Object.entries(now).some(([k, v]) => v > (prev ? prev[k as keyof typeof now] : 0))
+  // Evidence: a restoration claim needs a photo (the Commissioner approves on it). Photos of damage are optional.
   const restorationChanged = !ctx.previous || ctx.previous.restoration.stage !== s.restoration.stage
   if (!ctx.has_photo && restorationChanged && s.restoration.stage.startsWith('restored')) errors.push('Attach a photo of the restored road.')
-  if (!ctx.has_photo && newDamage) errors.push('Attach a photo of the reported damage.')
   return { errors, warnings }
 }
 
@@ -385,6 +386,7 @@ export const FIELD_LABELS: Record<string, string> = {
   'utilities.taps_broken': 'Taps broken',
   'utilities.taps_restored': 'Taps restored',
   'utilities.water_leaks': 'Water leaks',
+  'utilities.water_leaks_fixed': 'Leaks fixed',
   'utilities.drain_clogged': 'Drain clogged',
   'hazards.water_stagnation': 'Water stagnation',
   'hazards.potholes': 'Potholes',

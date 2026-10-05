@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ISSUE_KINDS, issueLabel } from '../../../shared/status.ts'
+import { isOverdue } from '../../../shared/stats.ts'
 import { get } from '../lib/api'
 import { canEditWard, useAuth } from '../lib/auth'
 import { submit } from '../lib/outbox'
@@ -26,13 +27,13 @@ export function IssueForm({ point, stretch, onClose, onDone }: { point: [number,
         <GpsBadge gps={gps} error={gpsError} />
         <span className="spacer" />
         <button className="btn" onClick={onClose}>Cancel</button>
-        <button className="btn primary" disabled={busy || !photos.length} onClick={async () => {
+        <button className="btn primary" disabled={busy || !description.trim()} onClick={async () => {
           setBusy(true)
           setError(null)
           try {
             const r = await submit<{ code: string }>({
               label: `Issue: ${issueLabel(kind)}`, method: 'POST', url: '/api/issues', photos: photoItems(photos),
-              body: { kind, location: point, stretch_id: stretch?.id ?? null, count, severity, description: description.trim() || null },
+              body: { kind, location: point, stretch_id: stretch?.id ?? null, count, severity, description: description.trim() },
             })
             onDone(r.queued ? 'No connection: issue saved on this phone and will be sent later.' : `Issue ${(r.result as { code: string }).code} reported.`, r.queued ? 'warn' : 'ok')
             onClose()
@@ -53,8 +54,8 @@ export function IssueForm({ point, stretch, onClose, onDone }: { point: [number,
         <Field label="How many?"><Stepper value={count} min={1} onChange={setCount} /></Field>
         <Field label="Severity"><Seg small value={severity} options={SEVERITY} onChange={setSeverity} /></Field>
       </div>
-      <Field label="Description (optional)"><textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. gravel dumped in the side drain opposite the school" /></Field>
-      <Field label="Photo (required)"><PhotoPicker photos={photos} setPhotos={setPhotos} gps={gps} required /></Field>
+      <Field label="Remark (required)"><textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="e.g. gravel dumped in the side drain opposite the school" /></Field>
+      <Field label="Photo (optional)"><PhotoPicker photos={photos} setPhotos={setPhotos} gps={gps} /></Field>
       {error && <div className="form-error">{error}</div>}
     </Sheet>
   )
@@ -83,7 +84,7 @@ export function IssueDetail({ id, onClose, onSelect, toast }: { id: string; onCl
   }, [issue?.assigned_to, issue?.due_date])
   if (!issue) return null
   const editable = canEditWard(user, issue.ward)
-  const overdue = issue.due_date && issue.status !== 'resolved' && new Date(issue.due_date) < new Date()
+  const overdue = issue.status !== 'resolved' && isOverdue(issue.due_date)
 
   async function save(body: Record<string, unknown>, msg: string) {
     setBusy(true)

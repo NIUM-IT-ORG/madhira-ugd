@@ -10,6 +10,11 @@
 export type Pipeline = 'not_started' | 'partial' | 'laid'
 export type Excavation = 'none' | 'road_cut' | 'trench_open' | 'backfilled'
 export type Restoration = 'not_due' | 'pending' | 'restored_curing_pending' | 'restored_curing_done'
+/**
+ * Road type being restored (v1.25). The four restoration steps are the same for every type; only their wording
+ * differs (CC: curing; gravel: compaction). Records made before v1.25 have no type and are CC roads.
+ */
+export type Surface = 'cc' | 'gravel'
 export type Motorable = 'yes' | 'difficult' | 'no'
 export type Approval = 'none' | 'pending' | 'approved' | 'rejected'
 
@@ -26,6 +31,7 @@ export interface StretchStatus {
   }
   restoration: {
     stage: Restoration // items 9-12 (12 = approval)
+    surface: Surface // road type (v1.25), default 'cc'
   }
   motorable: Motorable // item 13
   utilities: {
@@ -46,7 +52,7 @@ export function defaultStatus(): StretchStatus {
   return {
     sewer: { pipeline: 'not_started', pipe_laid_m: null, manholes_built: 0, ics_built: 0 },
     excavation: { stage: 'none', cut_length_m: null },
-    restoration: { stage: 'not_due' },
+    restoration: { stage: 'not_due', surface: 'cc' },
     motorable: 'yes',
     utilities: { taps_broken: 0, taps_restored: 0, water_leaks: 0, water_leaks_fixed: 0, drain_clogged: false },
     hazards: { water_stagnation: false, potholes: 0, uneven_backfill: false },
@@ -87,6 +93,10 @@ export const OPTIONS = {
     { v: 'restored_curing_pending', label: 'CC restored, curing not done' },
     { v: 'restored_curing_done', label: 'CC restored, curing done' },
   ],
+  surface: [
+    { v: 'cc', label: 'CC road' },
+    { v: 'gravel', label: 'Gravel road' },
+  ],
   motorable: [
     { v: 'yes', label: 'Motorable' },
     { v: 'difficult', label: 'Motorable with difficulty' },
@@ -97,6 +107,30 @@ export const OPTIONS = {
 export const label = (group: keyof typeof OPTIONS, v: string): string =>
   (OPTIONS[group] as readonly { v: string; label: string }[]).find((o) => o.v === v)?.label ?? v
 
+/** The restoration steps worded for the road type (the stored values are the same for every type). */
+export const RESTORATION_OPTIONS: Record<Surface, readonly { v: Restoration; label: string }[]> = {
+  cc: OPTIONS.restoration,
+  gravel: [
+    { v: 'not_due', label: 'Not due yet' },
+    { v: 'pending', label: 'Gravel road restoration pending' },
+    { v: 'restored_curing_pending', label: 'Gravel laid, not compacted' },
+    { v: 'restored_curing_done', label: 'Gravel laid and compacted' },
+  ],
+}
+/** Wording when several road types are involved (bulk updates, legends). */
+export const RESTORATION_GENERIC: readonly { v: Restoration; label: string }[] = [
+  { v: 'not_due', label: 'Not due yet' },
+  { v: 'pending', label: 'Restoration pending' },
+  { v: 'restored_curing_pending', label: 'Restored, curing / compaction not done' },
+  { v: 'restored_curing_done', label: 'Restored, curing / compaction done' },
+]
+export const surfaceOf = (s: { restoration?: { surface?: string } } | null | undefined): Surface =>
+  s?.restoration?.surface === 'gravel' ? 'gravel' : 'cc'
+export const restorationLabel = (stage: string, surface: string = 'cc'): string =>
+  (RESTORATION_OPTIONS[surface === 'gravel' ? 'gravel' : 'cc'].find((o) => o.v === stage)?.label) ?? stage
+/** Short road-type word for tags and tables: "CC" or "Gravel". */
+export const surfaceWord = (surface: string) => (surface === 'gravel' ? 'Gravel' : 'CC')
+
 // ---------------------------------------------------------------- overall stage (line colour)
 
 export type Stage = 'not_started' | 'in_progress' | 'backfilled' | 'curing' | 'awaiting_approval' | 'approved'
@@ -104,8 +138,8 @@ export type Stage = 'not_started' | 'in_progress' | 'backfilled' | 'curing' | 'a
 export const STAGES: { key: Stage; label: string; colour: string; hint: string }[] = [
   { key: 'not_started', label: 'Not started', colour: '#94a3b8', hint: 'No pipe laid, no road cut' },
   { key: 'in_progress', label: 'Work in progress', colour: '#3b82f6', hint: 'Road cut, trench open or pipe being laid' },
-  { key: 'backfilled', label: 'Back-filled, restoration pending', colour: '#f97316', hint: 'Trench filled; CC road not yet laid' },
-  { key: 'curing', label: 'CC restored, curing', colour: '#eab308', hint: 'CC road laid, curing not complete' },
+  { key: 'backfilled', label: 'Back-filled, restoration pending', colour: '#f97316', hint: 'Trench filled; road not yet restored' },
+  { key: 'curing', label: 'Restored, curing / compaction', colour: '#eab308', hint: 'CC laid and curing, or gravel laid and not compacted' },
   { key: 'awaiting_approval', label: 'Curing done, awaiting approval', colour: '#a3e635', hint: 'Ready for the Commissioner to approve' },
   { key: 'approved', label: 'Restored and approved', colour: '#16a34a', hint: 'Approved by the Commissioner' },
 ]
@@ -141,8 +175,8 @@ export const THEMES: { key: Theme; label: string; legend: { label: string; colou
     legend: [
       { label: 'Not due', colour: '#94a3b8' },
       { label: 'Restoration pending', colour: '#f97316' },
-      { label: 'Restored, curing not done', colour: '#eab308' },
-      { label: 'Curing done, awaiting approval', colour: '#a3e635' },
+      { label: 'Restored, curing / compaction not done', colour: '#eab308' },
+      { label: 'Curing / compaction done, awaiting approval', colour: '#a3e635' },
       { label: 'Approved', colour: '#16a34a' },
     ],
   },
@@ -234,14 +268,16 @@ export function deriveTags(s: StretchStatus, approval: Approval, planned_mh: num
   else if (s.excavation.stage === 'backfilled') t.push({ key: 'backfilled', text: 'Back-filled', tone: 'progress' })
   if (s.sewer.pipeline !== 'not_started' || s.sewer.manholes_built > 0) t.push({ key: 'sewer', text: sewerCombo(s, planned_mh), tone: 'progress' })
   const r = s.restoration.stage
-  if (r === 'pending') t.push({ key: 'restoration', text: 'CC restoration pending', tone: 'warn' })
-  if (r === 'restored_curing_pending') t.push({ key: 'restoration', text: 'CC restored, curing pending', tone: 'progress' })
+  const gravel = surfaceOf(s) === 'gravel'
+  const word = gravel ? 'Gravel' : 'CC'
+  if (r === 'pending') t.push({ key: 'restoration', text: `${word} restoration pending`, tone: 'warn' })
+  if (r === 'restored_curing_pending') t.push({ key: 'restoration', text: gravel ? 'Gravel laid, not compacted' : 'CC restored, curing pending', tone: 'progress' })
   if (r === 'restored_curing_done') {
     t.push(approval === 'approved'
-      ? { key: 'restoration', text: 'CC restored · approved', tone: 'good' }
+      ? { key: 'restoration', text: `${word} restored · approved`, tone: 'good' }
       : approval === 'rejected'
         ? { key: 'restoration', text: 'Restoration rejected · redo', tone: 'bad' }
-        : { key: 'restoration', text: 'Curing done · awaiting approval', tone: 'good' })
+        : { key: 'restoration', text: `${gravel ? 'Compacted' : 'Curing done'} · awaiting approval`, tone: 'good' })
   }
   return t
 }
@@ -334,12 +370,14 @@ export function checkStatus(s: StretchStatus, ctx: CheckContext): CheckResult {
   if (s.utilities.water_leaks_fixed > s.utilities.water_leaks) errors.push('Leaks fixed cannot exceed water pipe leakages.')
   if (s.sewer.manholes_built > 0 && s.sewer.pipeline === 'not_started') warnings.push('Manholes built but pipeline marked not started.')
   if (s.restoration.stage !== 'not_due' && s.restoration.stage !== 'pending' && s.excavation.stage !== 'backfilled' && s.sewer.pipeline === 'not_started') {
-    warnings.push('CC road marked restored, but no pipe laying or back-filling recorded.')
+    warnings.push('Road marked restored, but no pipe laying or back-filling recorded.')
   }
   if (s.excavation.stage === 'backfilled' && s.sewer.pipeline === 'not_started') warnings.push('Trench back-filled but pipeline marked not started.')
 
   // Evidence: a restoration claim needs a photo (the Commissioner approves on it). Photos of damage are optional.
+  // Changing the road type of a road already marked restored is a new restoration claim too.
   const restorationChanged = !ctx.previous || ctx.previous.restoration.stage !== s.restoration.stage
+    || surfaceOf(ctx.previous) !== surfaceOf(s)
   if (!ctx.has_photo && restorationChanged && s.restoration.stage.startsWith('restored')) errors.push('Attach a photo of the restored road.')
   return { errors, warnings }
 }
@@ -386,7 +424,8 @@ export const FIELD_LABELS: Record<string, string> = {
   'sewer.ics_built': 'ICs built',
   'excavation.stage': 'Excavation',
   'excavation.cut_length_m': 'Road cut length (m)',
-  'restoration.stage': 'CC restoration',
+  'restoration.stage': 'Road restoration',
+  'restoration.surface': 'Road type',
   motorable: 'Motorability',
   'utilities.taps_broken': 'Taps broken',
   'utilities.taps_restored': 'Taps restored',
@@ -398,12 +437,17 @@ export const FIELD_LABELS: Record<string, string> = {
   'hazards.uneven_backfill': 'Uneven back-fill',
 }
 
-export function describeValue(path: string, v: unknown): string {
+/** A field value in words. The status snapshot (if given) words restoration steps for its road type. */
+export function describeValue(path: string, v: unknown, status?: { restoration?: { surface?: string } } | null): string {
   if (v === null || v === undefined) return '—'
   if (typeof v === 'boolean') return v ? 'Yes' : 'No'
   if (path === 'sewer.pipeline') return label('pipeline', String(v))
   if (path === 'excavation.stage') return label('excavation', String(v))
-  if (path === 'restoration.stage') return label('restoration', String(v))
+  if (path === 'restoration.stage') {
+    // Without the road's status (e.g. the activity feed) use wording that fits every road type.
+    return status === undefined ? (RESTORATION_GENERIC.find((o) => o.v === v)?.label ?? String(v)) : restorationLabel(String(v), surfaceOf(status))
+  }
+  if (path === 'restoration.surface') return label('surface', String(v))
   if (path === 'motorable') return label('motorable', String(v))
   return String(v)
 }

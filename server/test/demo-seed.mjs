@@ -83,6 +83,7 @@ const plans = [
   { ward: 13, name: 'Muslim Bazar road', status: { sewer: { pipeline: 'laid', manholes_built: 2 }, excavation: { stage: 'trench_open' }, utilities: { drain_clogged: true, taps_broken: 2 } }, photo: true },
   { ward: 15, name: 'Main Road (Varthaka Sangham)', status: { sewer: { pipeline: 'laid', manholes_built: 4, ics_built: 6 }, excavation: { stage: 'backfilled' }, restoration: { stage: 'pending' }, hazards: { potholes: 2, water_stagnation: true } }, photo: true },
   { ward: 17, name: 'Sai Baba Temple street', status: { sewer: { pipeline: 'laid', manholes_built: 3, ics_built: 4 }, excavation: { stage: 'backfilled' }, restoration: { stage: 'restored_curing_pending' } }, photo: true },
+  { ward: 16, name: 'Gravel lane near tank bund', status: { sewer: { pipeline: 'laid', manholes_built: 2 }, excavation: { stage: 'backfilled' }, restoration: { surface: 'gravel', stage: 'restored_curing_pending' } }, photo: true },
   { ward: 21, name: 'RCM Church road', status: { sewer: { pipeline: 'laid', manholes_built: 3, ics_built: 5 }, excavation: { stage: 'backfilled' }, restoration: { stage: 'restored_curing_done' } }, photo: true },
   { ward: 18, name: 'Ladak Bazar main lane', status: { sewer: { pipeline: 'laid', manholes_built: 4, ics_built: 8 }, excavation: { stage: 'backfilled' }, restoration: { stage: 'restored_curing_done' } }, photo: true, approve: true },
   { ward: 12, name: 'Vaddera Bazar', status: { sewer: { pipeline: 'partial', pipe_laid_m: 40, manholes_built: 1 }, excavation: { stage: 'trench_open' }, motorable: 'no' }, photo: true },

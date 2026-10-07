@@ -51,6 +51,10 @@ export interface Overlays {
   issues: FeatureCollection
   proposals: FeatureCollection
   draft: FeatureCollection
+  /** Plan pipes no road stretch covers yet (v1.25). */
+  unrecorded: FeatureCollection
+  /** Wards with the share of their plan network recorded (`pct`, 0-100). */
+  coverage: FeatureCollection
 }
 
 export interface Highlight {
@@ -120,9 +124,19 @@ function setData(map: MlMap, source: string, data: FeatureCollection) {
 
 function addFieldLayers(map: MlMap) {
   const empty: FeatureCollection = { type: 'FeatureCollection', features: [] }
-  for (const id of ['stretches', 'issues', 'proposals', 'draft']) {
+  for (const id of ['stretches', 'issues', 'proposals', 'draft', 'unrecorded', 'coverage']) {
     map.addSource(id, { type: 'geojson', data: empty, promoteId: 'id' })
   }
+  // Coverage: wards shaded by how much of their plan network staff have recorded (light = little, dark = most).
+  map.addLayer({ id: 'coverage-fill', type: 'fill', source: 'coverage', layout: { visibility: 'none' },
+    paint: { 'fill-color': ['interpolate', ['linear'], ['get', 'pct'], 0, '#fee2e2', 25, '#fca5a5', 50, '#5eead4', 100, '#0f766e'], 'fill-opacity': 0.45 } }, 'pipes-casing')
+  map.addLayer({ id: 'coverage-label', type: 'symbol', source: 'coverage', layout: { visibility: 'none', 'text-field': ['concat', ['to-string', ['round', ['get', 'pct']]], '% recorded'],
+    'text-font': ['Noto Sans Bold'], 'text-size': 12, 'text-offset': [0, 1.4] }, paint: { 'text-color': '#ffffff', 'text-halo-color': '#0b1020', 'text-halo-width': 1.6 } })
+  // Not yet recorded: plan pipes with no road stretch, drawn bright so staff can be sent there.
+  map.addLayer({ id: 'unrecorded-casing', type: 'line', source: 'unrecorded', layout: { visibility: 'none', 'line-cap': 'round' },
+    paint: { 'line-color': '#0b1020', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 3, 17, 8] } }, 'manholes')
+  map.addLayer({ id: 'unrecorded', type: 'line', source: 'unrecorded', layout: { visibility: 'none', 'line-cap': 'round' },
+    paint: { 'line-color': '#e879f9', 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 1.6, 17, 5], 'line-dasharray': [2, 1.2] } }, 'manholes')
   const width = (base: number) => ['interpolate', ['linear'], ['zoom'], 13, base * 0.5, 16, base, 19, base * 2.2] as never
   // Stretches sit above the pipes: they are the field picture.
   map.addLayer({ id: 'stretches-issue', type: 'line', source: 'stretches', filter: ['all', ['any', ['==', ['geometry-type'], 'LineString'], ['==', ['geometry-type'], 'MultiLineString']], ['==', ['get', '_issue'], true]],
@@ -235,6 +249,8 @@ export default function MapView(p: Props) {
       setData(map, 'issues', c.overlays.issues)
       setData(map, 'proposals', c.overlays.proposals)
       setData(map, 'draft', c.overlays.draft)
+      setData(map, 'unrecorded', c.overlays.unrecorded)
+      setData(map, 'coverage', c.overlays.coverage)
     })
     map.on('mousemove', (e) => {
       const mode = props.current.mode
@@ -289,6 +305,8 @@ export default function MapView(p: Props) {
     setData(m, 'issues', p.overlays.issues)
     setData(m, 'proposals', p.overlays.proposals)
     setData(m, 'draft', p.overlays.draft)
+    setData(m, 'unrecorded', p.overlays.unrecorded)
+    setData(m, 'coverage', p.overlays.coverage)
   }), [p.overlays])
 
   useEffect(() => whenReady((m) => {

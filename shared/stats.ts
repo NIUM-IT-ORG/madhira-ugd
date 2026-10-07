@@ -1,8 +1,9 @@
 /**
  * Progress figures, shared by the dashboard (web) and the Excel export (server) so both always agree.
- * "Reported" = the progress Excel (contractor / MB figures); "field" = what was recorded on the map.
+ * Everything comes from what staff record on the map ("field"), measured against the plan network: the
+ * drawings plus the network changes the Commissioner approved (v1.25: the progress Excel is no longer used).
  */
-import { normaliseStatus, type Approval, type StretchStatus } from './status.ts'
+import { normaliseStatus, surfaceOf, type Approval, type StretchStatus } from './status.ts'
 
 export interface StretchLike {
   ward: number
@@ -13,6 +14,7 @@ export interface StretchLike {
   approval: Approval
   open_issues: number
   record_state?: string
+  pipe_ids?: string[]
 }
 /** Today's date in India time, as YYYY-MM-DD. */
 export const todayIST = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
@@ -20,13 +22,6 @@ export const todayIST = () => new Date().toLocaleDateString('en-CA', { timeZone:
 export const isOverdue = (due: string | null | undefined) => !!due && String(due).slice(0, 10) < todayIST()
 
 export interface IssueLike { ward: number | null; zone: number | null; status: string; severity: string; count: number; kind: string; reported_at: string; due_date?: string | null }
-export interface BaselineGroupLike {
-  zone: number
-  wards: number[]
-  locality: string | null
-  sanctioned: { pipe_m: number; manholes: number; ics: number }
-  executed: { pipe_m: number; manholes: number; ics: number }
-}
 /** Labour is recorded per zone per day (v1.2); ward rows show no labour figure. */
 export interface LabourLike { log_date: string; zone: number; labourers: number; machines: number }
 
@@ -41,6 +36,8 @@ export interface FieldFigures {
   backfilled_m: number
   restoration_pending_m: number
   restored_m: number
+  restored_cc_m: number
+  restored_gravel_m: number
   curing_pending_m: number
   approved_m: number
   not_motorable_m: number
@@ -51,12 +48,14 @@ export interface FieldFigures {
   stagnation: number
   potholes: number
   proposed: number
+  /** Roads drawn by hand that follow no plan pipe (not part of plan coverage). */
+  offplan_m: number
 }
 
 export const emptyField = (): FieldFigures => ({
   stretches: 0, surveyed_m: 0, pipe_laid_m: 0, manholes_built: 0, ics_built: 0, road_cut_m: 0, trench_open_m: 0, backfilled_m: 0,
-  restoration_pending_m: 0, restored_m: 0, curing_pending_m: 0, approved_m: 0, not_motorable_m: 0, difficult_m: 0,
-  taps_pending: 0, water_leaks: 0, drains_clogged: 0, stagnation: 0, potholes: 0, proposed: 0,
+  restoration_pending_m: 0, restored_m: 0, restored_cc_m: 0, restored_gravel_m: 0, curing_pending_m: 0, approved_m: 0,
+  not_motorable_m: 0, difficult_m: 0, taps_pending: 0, water_leaks: 0, drains_clogged: 0, stagnation: 0, potholes: 0, proposed: 0, offplan_m: 0,
 })
 
 export function addStretch(f: FieldFigures, st: StretchLike) {
@@ -74,7 +73,11 @@ export function addStretch(f: FieldFigures, st: StretchLike) {
   const r = s.restoration.stage
   if (r === 'pending' || (s.excavation.stage === 'backfilled' && r === 'not_due')) f.restoration_pending_m += L
   if (r === 'restored_curing_pending') f.curing_pending_m += L
-  if (r.startsWith('restored')) f.restored_m += L
+  if (r.startsWith('restored')) {
+    f.restored_m += L
+    if (surfaceOf(s) === 'gravel') f.restored_gravel_m += L
+    else f.restored_cc_m += L
+  }
   if (r === 'restored_curing_done' && st.approval === 'approved') f.approved_m += L
   if (s.motorable === 'no') f.not_motorable_m += L
   if (s.motorable === 'difficult') f.difficult_m += L
@@ -83,7 +86,23 @@ export function addStretch(f: FieldFigures, st: StretchLike) {
   f.drains_clogged += s.utilities.drain_clogged ? 1 : 0
   f.stagnation += s.hazards.water_stagnation ? 1 : 0
   f.potholes += s.hazards.potholes
+  if (!st.pipe_ids?.length) f.offplan_m += L
 }
+
+/** The plan network: pipes and manholes from the drawings plus approved changes (each with its ward). */
+export interface PlanPipeLike { id: string; ward: number | null; zone: number; length_m: number }
+export interface PlanManholeLike { id: string; ward: number | null; zone: number }
+export interface WardInfo { ward: number; zone: number; locality: string | null }
+
+/** Plan figures of an area and how much of it staff have recorded (pipes covered by a road stretch). */
+export interface PlanFigures {
+  pipe_m: number
+  pipes: number
+  manholes: number
+  recorded_m: number
+  recorded_pipes: number
+}
+const emptyPlan = (): PlanFigures => ({ pipe_m: 0, pipes: 0, manholes: 0, recorded_m: 0, recorded_pipes: 0 })
 
 export interface AreaRow {
   key: string
@@ -91,8 +110,7 @@ export interface AreaRow {
   zone: number
   wards: number[]
   locality: string | null
-  sanctioned: { pipe_m: number; manholes: number; ics: number }
-  reported: { pipe_m: number; manholes: number; ics: number }
+  plan: PlanFigures
   field: FieldFigures
   issues_open: number
   issues_high: number
@@ -100,11 +118,6 @@ export interface AreaRow {
   labour_avg_7d: number | null
   labour_avg_30d: number | null
 }
-
-const sum3 = (a: { pipe_m: number; manholes: number; ics: number }, b: { pipe_m: number; manholes: number; ics: number }) => ({
-  pipe_m: a.pipe_m + b.pipe_m, manholes: a.manholes + b.manholes, ics: a.ics + b.ics,
-})
-const zero3 = () => ({ pipe_m: 0, manholes: 0, ics: 0 })
 
 function labourAvg(logs: LabourLike[], zones: number[], days: number, today: Date) {
   // Days counted in India time: "last 7 days" = the 7 calendar days up to today.
@@ -116,48 +129,66 @@ function labourAvg(logs: LabourLike[], zones: number[], days: number, today: Dat
   return Math.round([...byDay.values()].reduce((a, b) => a + b, 0) / byDay.size)
 }
 
+/** Pipes covered by a live road stretch (proposed ones included: staff recorded them). */
+export function recordedPipeIds(stretches: StretchLike[]): Set<string> {
+  const out = new Set<string>()
+  for (const s of stretches) if (s.record_state !== 'rejected') for (const id of s.pipe_ids ?? []) out.add(id)
+  return out
+}
+
 /**
- * Rows at the progress-sheet's grain (one per sheet row: Zone 2's three wards are one row), grouped into
- * zones, plus the grand total.
+ * One row per ward, grouped into zones, plus the grand total. Plan = the current plan network of the area;
+ * field = what staff recorded (by the stretch's ward); recorded = plan pipes covered by a stretch.
  */
-export function progressTable(
-  baseline: BaselineGroupLike[],
-  stretches: StretchLike[],
-  issues: IssueLike[],
-  labour: LabourLike[] = [],
-  today = new Date(),
-) {
-  const groupOfWard = new Map<number, number>()
-  baseline.forEach((g, i) => g.wards.forEach((w) => groupOfWard.set(w, i)))
-  const rows: AreaRow[] = baseline.map((g) => ({
-    key: `w${g.wards.join('-')}`,
-    label: g.wards.length > 1 ? `Wards ${g.wards.join(', ')}` : `Ward ${g.wards[0]}`,
-    zone: g.zone, wards: g.wards, locality: g.locality,
-    sanctioned: { ...g.sanctioned }, reported: { ...g.executed }, field: emptyField(),
-    issues_open: 0, issues_high: 0, issues_overdue: 0,
-    labour_avg_7d: null, labour_avg_30d: null,
+export function progressTable(input: {
+  wards: WardInfo[]
+  pipes: PlanPipeLike[]
+  manholes: PlanManholeLike[]
+  stretches: StretchLike[]
+  issues: IssueLike[]
+  labour?: LabourLike[]
+  today?: Date
+}) {
+  const { wards, pipes, manholes, stretches, issues, labour = [], today = new Date() } = input
+  const rows: AreaRow[] = [...wards].sort((a, b) => a.zone - b.zone || a.ward - b.ward).map((w) => ({
+    key: `w${w.ward}`, label: `Ward ${w.ward}`, zone: w.zone, wards: [w.ward], locality: w.locality,
+    plan: emptyPlan(), field: emptyField(), issues_open: 0, issues_high: 0, issues_overdue: 0, labour_avg_7d: null, labour_avg_30d: null,
   }))
+  const rowOf = new Map(rows.map((r) => [r.wards[0], r]))
+  const recorded = recordedPipeIds(stretches)
+  for (const p of pipes) {
+    const r = p.ward != null ? rowOf.get(p.ward) : undefined
+    if (!r) continue
+    r.plan.pipe_m += p.length_m
+    r.plan.pipes++
+    if (recorded.has(p.id)) { r.plan.recorded_m += p.length_m; r.plan.recorded_pipes++ }
+  }
+  for (const m of manholes) {
+    const r = m.ward != null ? rowOf.get(m.ward) : undefined
+    if (r) r.plan.manholes++
+  }
   for (const s of stretches) {
-    const i = groupOfWard.get(s.ward)
-    if (i !== undefined) addStretch(rows[i].field, s)
+    if (s.record_state === 'rejected') continue
+    const r = rowOf.get(s.ward)
+    if (r) addStretch(r.field, s)
   }
   for (const it of issues) {
     if (it.status === 'resolved' || it.ward == null) continue
-    const i = groupOfWard.get(it.ward)
-    if (i === undefined) continue
-    rows[i].issues_open++
-    if (it.severity === 'high') rows[i].issues_high++
-    if (isOverdue(it.due_date)) rows[i].issues_overdue++
+    const r = rowOf.get(it.ward)
+    if (!r) continue
+    r.issues_open++
+    if (it.severity === 'high') r.issues_high++
+    if (isOverdue(it.due_date)) r.issues_overdue++
   }
   const combine = (key: string, label: string, zone: number, list: AreaRow[]): AreaRow => {
     const f = emptyField()
-    for (const r of list) for (const k of Object.keys(f) as (keyof FieldFigures)[]) f[k] += r.field[k]
-    const wards = list.flatMap((r) => r.wards)
+    const p = emptyPlan()
+    for (const r of list) {
+      for (const k of Object.keys(f) as (keyof FieldFigures)[]) f[k] += r.field[k]
+      for (const k of Object.keys(p) as (keyof PlanFigures)[]) p[k] += r.plan[k]
+    }
     return {
-      key, label, zone, wards, locality: null,
-      sanctioned: list.reduce((a, r) => sum3(a, r.sanctioned), zero3()),
-      reported: list.reduce((a, r) => sum3(a, r.reported), zero3()),
-      field: f,
+      key, label, zone, wards: list.flatMap((r) => r.wards), locality: null, plan: p, field: f,
       issues_open: list.reduce((a, r) => a + r.issues_open, 0),
       issues_high: list.reduce((a, r) => a + r.issues_high, 0),
       issues_overdue: list.reduce((a, r) => a + r.issues_overdue, 0),
@@ -165,7 +196,8 @@ export function progressTable(
       labour_avg_30d: labourAvg(labour, zone ? [zone] : [1, 2, 3, 4], 30, today),
     }
   }
-  const zones = [1, 2, 3, 4].map((z) => ({ zone: combine(`z${z}`, `Zone ${z}`, z, rows.filter((r) => r.zone === z)), rows: rows.filter((r) => r.zone === z) }))
+  const zoneNumbers = [...new Set(wards.map((w) => w.zone))].sort((a, b) => a - b)
+  const zones = zoneNumbers.map((z) => ({ zone: combine(`z${z}`, `Zone ${z}`, z, rows.filter((r) => r.zone === z)), rows: rows.filter((r) => r.zone === z) }))
   const total = combine('total', 'All zones', 0, rows)
   return { zones, total }
 }

@@ -1,6 +1,7 @@
 import type { Indexes } from '../lib'
 import { fmtM, manholeName } from '../lib/data'
 import type { Selection } from '../lib/types'
+import { useFieldProgress } from '../lib/progress'
 
 interface Props {
   selection: Selection
@@ -40,6 +41,7 @@ function Progress({ label, done, total, unit }: { label: string; done: number; t
 }
 
 export default function DetailPanel({ selection, idx, onSelect, onClose, onDelete, pendingDelete, canEdit, isAdmin }: Props) {
+  const progress = useFieldProgress()
   if (!selection) return null
   let title = ''
   let body: React.ReactNode = null
@@ -114,21 +116,22 @@ export default function DetailPanel({ selection, idx, onSelect, onClose, onDelet
     const w = idx.wardStats.get(selection.id)
     if (!w) return null
     title = `Ward ${w.ward}`
-    const bl = w.baseline
-    const shared = bl && bl.wards.length > 1
+    const r = progress.zones.flatMap((z) => z.rows).find((x) => x.wards[0] === w.ward)
     body = (
       <>
         <Row k="Zone" v={`Zone ${w.zone}`} />
         <Row k="Locality" v={w.locality} />
-        <Row k="Network on plans" v={`${w.manholes} MH · ${fmtM(w.pipe_m)}`} />
-        {bl && (
+        {r && (
           <>
-            <h4>
-              Progress (Excel, 30 Sep 2026){shared ? ` — wards ${bl.wards.join(', ')} combined` : ''}
-            </h4>
-            <Progress label="Pipeline" done={bl.executed.pipe_m} total={bl.sanctioned.pipe_m} unit="m" />
-            <Progress label="Manholes" done={bl.executed.manholes} total={bl.sanctioned.manholes} />
-            <Progress label="Inspection chambers" done={bl.executed.ics} total={bl.sanctioned.ics} />
+            <Row k="Plan network" v={`${r.plan.manholes} MH · ${fmtM(r.plan.pipe_m)}`} />
+            <h4>Recorded by staff</h4>
+            <Progress label="Network recorded" done={r.plan.recorded_m} total={r.plan.pipe_m} unit="m" />
+            <Progress label="Pipe laid" done={r.field.pipe_laid_m} total={r.plan.pipe_m} unit="m" />
+            <Progress label="Manholes built" done={r.field.manholes_built} total={r.plan.manholes} />
+            <Row k="Not yet recorded" v={fmtM(r.plan.pipe_m - r.plan.recorded_m)} />
+            <Row k="Inspection chambers built" v={String(r.field.ics_built)} />
+            <Row k="Road restored (CC · gravel)" v={`${fmtM(r.field.restored_cc_m)} · ${fmtM(r.field.restored_gravel_m)}`} />
+            <Row k="Open issues" v={String(r.issues_open)} />
           </>
         )}
       </>

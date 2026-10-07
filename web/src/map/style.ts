@@ -167,6 +167,8 @@ export const LAYER_GROUPS = {
   stretches: ['stretches-issue', 'stretches-casing', 'stretches', 'stretches-nomotor', 'stretches-proposed', 'stretches-hit', 'stretches-badges', 'stretches-label'],
   issues: ['issues', 'issues-label'],
   proposals: ['proposals-line', 'proposals-point'],
+  unrecorded: ['unrecorded-casing', 'unrecorded'],
+  coverage: ['coverage-fill', 'coverage-label'],
 } as const
 
 export type LayerGroup = keyof typeof LAYER_GROUPS

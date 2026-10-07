@@ -420,6 +420,64 @@ ok(!(await admin.get(`/api/stretches/${ds.id}`)).issues.length, 'the next save o
 const bulkDel = await admin.post('/api/issues/delete', { ids: [dd.id, ni.id], reason: 'Test clean-up' });
 ok(bulkDel.status === 200 && bulkDel.deleted.length === 2, 'several issues deleted at once');
 
+// ---- v1.25: road type (CC / gravel) and the field-only dashboard
+const gr = await admin.post('/api/stretches', { name: 'Test gravel lane', geometry: one(free[5]), pipe_ids: [free[5].properties.id],
+  status: { excavation: { stage: 'backfilled' }, sewer: { pipeline: 'laid' }, restoration: { surface: 'gravel', stage: 'pending' } } });
+let gd = await admin.get(`/api/stretches/${gr.id}`);
+ok(gr.status === 200 && gd.stretch.properties.status.restoration.surface === 'gravel', 'a gravel road is recorded');
+const oldStyle = await admin.post('/api/stretches', { geometry: one(free[6]), pipe_ids: [free[6].properties.id], status: { restoration: { stage: 'pending' } } });
+ok((await admin.get(`/api/stretches/${oldStyle.id}`)).stretch.properties.status.restoration.surface === 'cc', 'a road saved without a type (old phones, old records) is a CC road');
+ok((await admin.patch(`/api/stretches/${gr.id}`, { base_version: gd.stretch.properties.version, changes: [{ path: 'restoration.surface', to: 'tar' }] })).status === 400, 'unknown road type refused');
+ok((await admin.patch(`/api/stretches/${gr.id}`, { base_version: gd.stretch.properties.version, changes: [{ path: 'restoration.stage', to: 'restored_curing_pending' }] })).status === 400, 'gravel laid needs a photo');
+const g1 = await admin.patch(`/api/stretches/${gr.id}`, { base_version: gd.stretch.properties.version, photos: [(await uploadPhoto(admin)).id], changes: [{ path: 'restoration.stage', to: 'restored_curing_pending' }] });
+gd = await admin.get(`/api/stretches/${gr.id}`);
+ok(g1.status === 200 && gd.stretch.properties.stage === 'curing', 'gravel laid, not compacted: stage "restored, curing / compaction"');
+const g2 = await admin.patch(`/api/stretches/${gr.id}`, { base_version: g1.version, photos: [(await uploadPhoto(admin)).id], changes: [{ path: 'restoration.stage', to: 'restored_curing_done' }] });
+gd = await admin.get(`/api/stretches/${gr.id}`);
+ok(g2.status === 200 && gd.stretch.properties.approval === 'pending', 'gravel compacted goes for approval');
+ok((await admin.post(`/api/stretches/${gr.id}/approve`)).status === 200, 'compacted gravel road approved');
+gd = await admin.get(`/api/stretches/${gr.id}`);
+ok(gd.stretch.properties.stage === 'approved', 'the gravel road turns green');
+ok((await admin.patch(`/api/stretches/${gr.id}`, { base_version: gd.stretch.properties.version, changes: [{ path: 'restoration.surface', to: 'cc' }] })).status === 400, 'changing the type of a restored road needs a photo');
+const g3 = await admin.patch(`/api/stretches/${gr.id}`, { base_version: gd.stretch.properties.version, photos: [(await uploadPhoto(admin)).id], changes: [{ path: 'restoration.surface', to: 'cc' }] });
+gd = await admin.get(`/api/stretches/${gr.id}`);
+ok(g3.status === 200 && gd.stretch.properties.approval === 'pending', 'a different road type needs approving again');
+ok(gd.versions[0].status?.restoration?.surface === 'cc' && gd.versions.some((v) => v.changes.some((c) => c.path === 'restoration.surface')), 'history keeps the road type change with its snapshot');
+await admin.patch(`/api/stretches/${gr.id}`, { base_version: gd.stretch.properties.version, photos: [(await uploadPhoto(admin)).id], changes: [{ path: 'restoration.surface', to: 'gravel' }] });
+await admin.post(`/api/stretches/${gr.id}/approve`);
+// stale edit of the road type while the step changed is a conflict
+gd = await admin.get(`/api/stretches/${gr.id}`);
+const gv = gd.stretch.properties.version;
+await admin.patch(`/api/stretches/${gr.id}`, { base_version: gv, changes: [{ path: 'excavation.cut_length_m', to: 20 }] });
+await admin.patch(`/api/stretches/${gr.id}`, { base_version: gv + 1, changes: [{ path: 'restoration.stage', to: 'pending' }] });
+ok((await admin.patch(`/api/stretches/${gr.id}`, { base_version: gv, changes: [{ path: 'restoration.surface', to: 'cc' }] })).status === 409, 'road type and restoration step changed by two people: conflict');
+
+const plan = await admin.get('/api/stats/plan');
+ok(plan.status === 200 && Math.abs(plan.base.pipe_m - 119794.6) < 1, `plan network from the drawings: ${Math.round(plan.base.pipe_m)} m`);
+ok(Math.abs(plan.current.pipe_m - (plan.base.pipe_m + plan.changes.added_pipe_m - plan.changes.removed_pipe_m)) < 1
+  && plan.changes.added_pipes >= 1 && plan.changes.removed_pipes >= 1, `plan = drawings + approved additions − approved removals (${Math.round(plan.current.pipe_m)} m)`);
+const tl2 = await admin.get('/api/stats/timeline');
+const lastW = tl2.weeks.at(-1);
+ok(Math.abs(lastW.plan_m - plan.current.pipe_m) < 1 && typeof lastW.issues_opened === 'number' && lastW.restored_gravel_m >= 0, 'weekly chart has the plan line and issues per week');
+const wk = await admin.get('/api/stats/week');
+ok(wk.status === 200 && wk.updates > 0 && wk.active.length > 0, `last 7 days: ${wk.updates} updates by ${wk.active.length} people`);
+const { createRequire } = await import('node:module');
+const ExcelJS = createRequire(path.join(root, 'server', 'package.json'))('exceljs');
+const px = await admin.call('GET', '/api/export/progress.xlsx', undefined, { raw: true });
+const wbk = new ExcelJS.Workbook();
+await wbk.xlsx.load(Buffer.from(await px.arrayBuffer()));
+const ph = wbk.getWorksheet('Progress');
+const heads = [...ph.getRow(4).values, ...ph.getRow(5).values].filter(Boolean).join('|');
+ok(/Plan network/.test(heads) && /Not yet recorded/.test(heads) && !/Sanctioned|reported/i.test(heads), 'Excel progress sheet is field-only (plan network, recorded, not yet recorded)');
+ok(ph.rowCount > 22 + 4, `progress sheet has a row per ward (${ph.rowCount} rows)`);
+const sh = wbk.getWorksheet('Stretches');
+const typeCol = sh.getRow(1).values.indexOf('Road type');
+let gravelRows = 0;
+sh.eachRow((r, i) => { if (i > 1 && r.getCell(typeCol).value === 'Gravel road') gravelRows++ });
+ok(typeCol > 0 && gravelRows >= 1, 'Stretches sheet shows the road type');
+await admin.del(`/api/stretches/${gr.id}`, { reason: 'Test cleanup' });
+await admin.del(`/api/stretches/${oldStyle.id}`, { reason: 'Test cleanup' });
+
 // ---- clean up test users (deactivate)
 await admin.patch(`/api/users/${mk.user.id}`, { active: false });
 await admin.patch(`/api/users/${mv.user.id}`, { active: false });

@@ -16,10 +16,12 @@ import { useData } from '../lib/store'
 import type { Selection, StretchFeature } from '../lib/types'
 import MapView, { type FlyTarget, type MapClick, type MapMode } from '../map/MapView'
 import { issueOverlay, proposalOverlay, stretchOverlay } from '../map/overlays'
+import { showLayerEvent, useCoverageOverlays } from '../lib/progress'
 import type { LayerGroup, PipeColourMode } from '../map/style'
 
 const DEFAULT_LAYERS: Record<LayerGroup, boolean> = {
   imagery: true, surroundings: true, zones: true, wards: true, pipes: true, manholes: true, stretches: true, issues: true, proposals: true,
+  unrecorded: false, coverage: false,
 }
 
 type Tool =
@@ -82,12 +84,24 @@ export default function MapPage({ toast, focus }: { toast: (m: string, t?: 'ok' 
       ],
     }
   }, [tool])
+  const coverageFc = useCoverageOverlays()
   const overlays = useMemo(() => ({
     stretches: stretchFc,
     issues: issueOverlay(issues),
     proposals: proposalOverlay(requests, geo, stretches),
     draft: draftFc,
-  }), [stretchFc, issues, requests, geo, stretches, draftFc])
+    unrecorded: coverageFc.unrecorded,
+    coverage: coverageFc.coverage,
+  }), [stretchFc, issues, requests, geo, stretches, draftFc, coverageFc])
+  // The dashboard can ask for a layer ("Show on map").
+  useEffect(() => {
+    const on = (e: Event) => {
+      const layer = (e as CustomEvent<LayerGroup>).detail
+      setVisible((v) => ({ ...v, [layer]: true }))
+    }
+    window.addEventListener(showLayerEvent, on)
+    return () => window.removeEventListener(showLayerEvent, on)
+  }, [])
   const highlight = useMemo(() => ({
     pipes: tool?.t === 'stretch' && tool.method === 'pick' ? tool.pipes : [],
     manholes: tool?.t === 'pipe' && tool.from ? [tool.from] : [],

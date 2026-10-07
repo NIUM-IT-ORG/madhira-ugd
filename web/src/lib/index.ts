@@ -1,5 +1,5 @@
 import type { MultiPolygon, Polygon } from 'geojson'
-import type { BaselineGroup, GeoData, ManholeProps, PipeProps } from './types'
+import type { GeoData, ManholeProps, PipeProps } from './types'
 
 export interface WardStats {
   ward: number
@@ -7,7 +7,6 @@ export interface WardStats {
   locality: string | null
   manholes: number
   pipe_m: number
-  baseline?: BaselineGroup
 }
 
 export interface Indexes {
@@ -15,7 +14,6 @@ export interface Indexes {
   mhById: Map<string, ManholeProps & { coord: [number, number] }>
   pipesByMh: Map<string, string[]>
   wardStats: Map<number, WardStats>
-  baselineByWard: Map<number, BaselineGroup>
   searchList: { key: string; text: string; kind: 'manhole' | 'ward' | 'pipe'; id: string }[]
 }
 
@@ -24,12 +22,9 @@ export function buildIndexes(d: GeoData): Indexes {
   const mhById: Indexes['mhById'] = new Map()
   const pipesByMh: Indexes['pipesByMh'] = new Map()
   const wardStats: Indexes['wardStats'] = new Map()
-  const baselineByWard: Indexes['baselineByWard'] = new Map()
-
-  for (const g of d.baseline.groups) for (const w of g.wards) baselineByWard.set(w, g)
   for (const f of d.wards.features) {
     const p = f.properties
-    wardStats.set(p.ward, { ward: p.ward, zone: p.zone, locality: p.locality, manholes: 0, pipe_m: 0, baseline: baselineByWard.get(p.ward) })
+    wardStats.set(p.ward, { ward: p.ward, zone: p.zone, locality: p.locality, manholes: 0, pipe_m: 0 })
   }
   for (const f of d.manholes.features) {
     mhById.set(f.properties.id, { ...f.properties, coord: f.geometry.coordinates as [number, number] })
@@ -56,7 +51,7 @@ export function buildIndexes(d: GeoData): Indexes {
     if (m.label) searchList.push({ key: m.id, text: `${m.label} Z${m.zone}`, kind: 'manhole', id: m.id })
   }
   for (const p of pipeById.values()) searchList.push({ key: p.id, text: p.id, kind: 'pipe', id: p.id })
-  return { pipeById, mhById, pipesByMh, wardStats, baselineByWard, searchList }
+  return { pipeById, mhById, pipesByMh, wardStats, searchList }
 }
 
 export function boundsOf(coords: [number, number][]): [[number, number], [number, number]] {

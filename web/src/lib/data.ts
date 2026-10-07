@@ -11,16 +11,16 @@ export const loadNetwork = () => get<{ pipes: GeoData['pipes']; manholes: GeoDat
 
 /** Reference data produced by the pipeline (immutable; field status comes from the API in later phases). */
 export async function loadGeoData(): Promise<GeoData> {
-  const [wards, zones, network, labels, imagery, meta, baseline] = await Promise.all([
+  const [wards, zones, network, labels, imagery, meta] = await Promise.all([
     get<GeoData['wards']>('/data/wards.geojson'),
     get<GeoData['zones']>('/data/zones.geojson'),
     loadNetwork(),
     get<GeoData['labels']>('/data/labels.geojson'),
     get<GeoData['imagery']>('/data/imagery.json'),
     get<GeoData['meta']>('/data/map_meta.json'),
-    get<GeoData['baseline']>('/data/baseline.json'),
   ])
-  return { wards, zones, pipes: network.pipes, manholes: network.manholes, labels, imagery, meta, baseline }
+  // v1.25: the progress sheet (baseline.json) is no longer used; all progress comes from what staff record.
+  return { wards, zones, pipes: network.pipes, manholes: network.manholes, labels, imagery, meta }
 }
 
 /** Manhole id "Z1/MH-245#Z1P2" -> display label "MH-245 (Z1, P2)". */

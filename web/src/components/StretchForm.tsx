@@ -1,8 +1,5 @@
 import { useMemo, useState } from 'react'
-import {
-  OPTIONS, STAGE_COLOUR, checkStatus, defaultStatus, deriveStage, deriveTags, diffStatus, nextApproval, normaliseStatus, sewerCombo,
-  type StretchStatus,
-} from '../../../shared/status.ts'
+import { OPTIONS, STAGE_COLOUR, checkStatus, defaultStatus, deriveStage, deriveTags, diffStatus, nextApproval, normaliseStatus, sewerCombo, type StretchStatus, RESTORATION_OPTIONS, surfaceOf } from '../../../shared/status.ts'
 import type { LineGeometry } from '../../../shared/geo.ts'
 import { ApiError } from '../lib/api'
 import { useAuth } from '../lib/auth'
@@ -164,9 +161,12 @@ export default function StretchForm({ existing, draft, onClose, onSaved }: Props
         )}
       </Bucket>
 
-      <Bucket letter="C" title="CC road restoration" items="items 9–12">
+      <Bucket letter="C" title="Road restoration" items="items 9–12">
+        <Field label="Road type" hint="CC roads are restored with concrete and cured; gravel roads with gravel and compaction.">
+          <Seg value={surfaceOf(s)} options={OPTIONS.surface} onChange={(v) => set('restoration', { surface: v })} />
+        </Field>
         <Field label="Restoration" hint={s.restoration.stage === 'restored_curing_done' ? (approval === 'approved' ? 'Approved by the Commissioner (green).' : 'Goes to the Commissioner for approval; turns green when approved.') : undefined}>
-          <Seg value={s.restoration.stage} options={OPTIONS.restoration} onChange={(v) => set('restoration', { stage: v })} />
+          <Seg value={s.restoration.stage} options={RESTORATION_OPTIONS[surfaceOf(s)]} onChange={(v) => set('restoration', { stage: v })} />
         </Field>
       </Bucket>
 
@@ -202,7 +202,7 @@ export default function StretchForm({ existing, draft, onClose, onSaved }: Props
         <Toggle checked={s.hazards.uneven_backfill} onChange={(v) => set('hazards', { uneven_backfill: v })} label="Uneven back-fill" />
       </Bucket>
 
-      <Field label="Photos" hint="Needed when you mark the CC road restored; useful for damage too. Each photo keeps its GPS position and time.">
+      <Field label="Photos" hint="Needed when you mark the road restored; useful for damage too. Each photo keeps its GPS position and time.">
         <PhotoPicker photos={photos} setPhotos={setPhotos} gps={gps} required={check.errors.some((e) => e.startsWith('Attach a photo'))} />
       </Field>
       <Field label="Note (optional)">

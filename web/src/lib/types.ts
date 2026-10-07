@@ -86,7 +86,6 @@ export interface GeoData {
   labels: FeatureCollection<Point>
   imagery: ImageryFrame[]
   meta: MapMeta
-  baseline: Baseline
 }
 
 export type Selection =
@@ -153,6 +152,7 @@ export interface StretchVersion {
   batch_id: string | null
   user_name: string | null
   user_designation: string | null
+  status?: StretchStatus // snapshot after this change (words restoration steps for the road type)
 }
 
 export interface Issue {

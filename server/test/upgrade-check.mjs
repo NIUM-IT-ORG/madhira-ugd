@@ -68,6 +68,11 @@ const canon = (v) => (v && typeof v === 'object' && !Array.isArray(v)
   ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${canon(v[k])}`).join(',')}}`
   : Array.isArray(v) ? `[${v.map(canon).join(',')}]` : JSON.stringify(v));
 const same = (a, b) => canon(a) === canon(b);
+/** Every value of the old record is still there and unchanged (a release may add fields with defaults). */
+const kept = (old, now) => {
+  if (old && typeof old === 'object' && !Array.isArray(old)) return !!now && typeof now === 'object' && Object.keys(old).every((k) => kept(old[k], now[k]));
+  return canon(old) === canon(now);
+};
 
 const missingUsers = before.users.filter((u) => !now.users.includes(u));
 check(!missingUsers.length, `all ${before.users.length} users kept${missingUsers.length ? `; missing: ${missingUsers.join(', ')}` : ''}`);
@@ -75,7 +80,8 @@ const added = now.users.filter((u) => !before.users.includes(u));
 if (added.length) console.log(`      new accounts from this release: ${added.map((u) => u.split('|')[0]).join(', ')}`);
 for (const [code, s] of Object.entries(before.stretches)) {
   const n = now.stretches[code];
-  check(!!n && same({ ...s, history: undefined }, { ...n, history: undefined }) && s.history.every((h) => n.history.includes(h)),
+  check(!!n && same({ ...s, history: undefined, status: undefined }, { ...n, history: undefined, status: undefined })
+    && kept(JSON.parse(s.status), JSON.parse(n.status)) && s.history.every((h) => n.history.includes(h)),
     `stretch ${code}: status, stage, approval and ${s.history.length} history entries kept`);
 }
 check(same(before.issues, now.issues), `all ${Object.keys(before.issues).length} issues kept unchanged`);

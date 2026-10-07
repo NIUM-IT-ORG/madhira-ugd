@@ -3,6 +3,7 @@ import { BADGE_INFO, STAGES, THEMES, type Stage, type Theme } from '../../../sha
 import type { Indexes } from '../lib'
 import type { GeoData, Selection } from '../lib/types'
 import { DIA_STOPS, ZONE_COLOURS, type LayerGroup, type PipeColourMode } from '../map/style'
+import { useFieldProgress } from '../lib/progress'
 
 export interface StretchFilter {
   stages: Stage[]
@@ -35,6 +36,8 @@ const LAYER_LABELS: [LayerGroup, string][] = [
   ['stretches', 'Road stretches (field status)'],
   ['issues', 'Issue pins'],
   ['proposals', 'Changes awaiting approval'],
+  ['unrecorded', 'Not yet recorded (pipes with no road stretch)'],
+  ['coverage', 'Wards shaded by share recorded'],
   ['pipes', 'Sewer pipes'],
   ['manholes', 'Manholes'],
   ['wards', 'Ward boundaries'],
@@ -44,6 +47,7 @@ const LAYER_LABELS: [LayerGroup, string][] = [
 ]
 
 export default function LayerPanel(p: Props) {
+  const progress = useFieldProgress()
   const [q, setQ] = useState('')
   const results = useMemo(() => {
     const s = q.trim().toLowerCase()
@@ -124,15 +128,13 @@ export default function LayerPanel(p: Props) {
         <h4>Zones</h4>
         <div className="zone-list">
           {p.data.zones.features.map((z) => {
-            const groups = p.data.baseline.groups.filter((g) => g.zone === z.properties.zone)
-            const sanc = groups.reduce((a, g) => a + g.sanctioned.pipe_m, 0)
-            const done = groups.reduce((a, g) => a + g.executed.pipe_m, 0)
-            const pct = sanc ? (done / sanc) * 100 : 0
+            const row = progress.zones.find((x) => x.zone.zone === z.properties.zone)?.zone
+            const pct = row && row.plan.pipe_m ? (row.plan.recorded_m / row.plan.pipe_m) * 100 : 0
             return (
               <button key={z.properties.zone} className="zone-chip" onClick={() => p.onZone(z.properties.zone)}>
                 <span className="swatch" style={{ background: ZONE_COLOURS[z.properties.zone] }} />
                 <span className="zname">{z.properties.name}</span>
-                <span className="zpct" title="Pipeline executed vs sanctioned (Excel 30 Sep 2026)">{pct.toFixed(0)}%</span>
+                <span className="zpct" title="Share of the zone's plan network recorded by staff">{pct.toFixed(0)}%</span>
               </button>
             )
           })}

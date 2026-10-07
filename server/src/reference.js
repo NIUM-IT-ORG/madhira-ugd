@@ -14,7 +14,17 @@ function load(name) {
 const wards = load('wards.geojson').features;
 const basePipes = load('pipes.geojson').features;
 const baseManholes = load('manholes.geojson').features;
-const baseline = load('baseline.json');
+// A few features of the drawings have no ward: give them the nearest ward (in memory only; files untouched).
+for (const f of basePipes) if (f.properties.ward == null) f.properties.ward = wardOfPoint(midpoint(f.geometry), wards).ward;
+for (const f of baseManholes) if (f.properties.ward == null) f.properties.ward = wardOfPoint(f.geometry.coordinates, wards).ward;
+/** Pipes as drawn (for lengths of pipes removed later). */
+export const basePipesById = new Map(basePipes.map((f) => [f.properties.id, f]));
+/** The network as drawn, before any approved change (for "plan changes since the drawings"). */
+export const basePlan = {
+  pipe_m: basePipes.reduce((a, f) => a + (f.properties.length_m ?? 0), 0),
+  pipes: basePipes.length,
+  manholes: baseManholes.length,
+};
 
 const pipes = new Map();
 const manholes = new Map();
@@ -28,7 +38,7 @@ function reset() {
 }
 reset();
 
-export const reference = { wards, baseline };
+export const reference = { wards };
 export const network = {
   pipes,
   manholes,

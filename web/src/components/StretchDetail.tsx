@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import {
-  FIELD_LABELS, STAGES, describeValue, deriveTags, issueLabel, label, sewerCombo,
+  FIELD_LABELS, STAGES, describeValue, deriveTags, issueLabel, label, restorationLabel, sewerCombo, surfaceOf,
 } from '../../../shared/status.ts'
 import { del, get, post } from '../lib/api'
 import { canEditWard, useAuth } from '../lib/auth'
@@ -78,7 +78,7 @@ export default function StretchDetail({ id, onSelect, onEdit, onRedraw, onAddIss
             <Tags tags={tags} />
             {p.approval === 'pending' && s.restoration.stage === 'restored_curing_done' && (
               <div className="callout good">
-                CC road restored and cured: waiting for the Commissioner's approval.
+                {surfaceOf(s) === 'gravel' ? 'Gravel road laid and compacted' : 'CC road restored and cured'}: waiting for the Commissioner's approval.
                 {isAdmin && live && (
                   <div className="btn-row">
                     <button className="btn primary" onClick={() => setConfirm('approve')}>Approve (turn green)</button>
@@ -101,8 +101,8 @@ export default function StretchDetail({ id, onSelect, onEdit, onRedraw, onAddIss
               <dd>{label('pipeline', s.sewer.pipeline)}{s.sewer.pipeline === 'partial' && s.sewer.pipe_laid_m ? ` (${s.sewer.pipe_laid_m} m)` : ''} · {sewerCombo(s, p.planned_mh)}</dd>
               <dt>B · Road cutting</dt>
               <dd>{label('excavation', s.excavation.stage)}{s.excavation.cut_length_m ? ` · ${s.excavation.cut_length_m} m cut` : ''}</dd>
-              <dt>C · CC restoration</dt>
-              <dd>{label('restoration', s.restoration.stage)}{p.approval === 'approved' ? ' · approved' : ''}</dd>
+              <dt>C · Road restoration</dt>
+              <dd>{label('surface', surfaceOf(s))}: {restorationLabel(s.restoration.stage, surfaceOf(s))}{p.approval === 'approved' ? ' · approved' : ''}</dd>
               <dt>D · Motorability</dt>
               <dd>{label('motorable', s.motorable)}</dd>
               <dt>E · Utilities</dt>
@@ -158,7 +158,7 @@ export default function StretchDetail({ id, onSelect, onEdit, onRedraw, onAddIss
                   <ul className="changes">
                     {v.changes.slice(0, 12).map((c, i) => (
                       <li key={i}>
-                        {FIELD_LABELS[c.path] ?? c.path}: {v.kind !== 'create' && <><s>{describeValue(c.path, c.from)}</s> → </>}<b>{describeValue(c.path, c.to)}</b>
+                        {FIELD_LABELS[c.path] ?? c.path}: {v.kind !== 'create' && <><s>{describeValue(c.path, c.from, v.status ?? null)}</s> → </>}<b>{describeValue(c.path, c.to, v.status ?? null)}</b>
                       </li>
                     ))}
                   </ul>
@@ -183,7 +183,7 @@ export default function StretchDetail({ id, onSelect, onEdit, onRedraw, onAddIss
       </div>
 
       {confirm === 'approve' && (
-        <Confirm title={`Approve ${p.code}`} message="Confirm that the CC road is restored and cured. The stretch turns green." confirmLabel="Approve" needReason={false}
+        <Confirm title={`Approve ${p.code}`} message={surfaceOf(s) === 'gravel' ? 'Confirm that the gravel road is laid and compacted. The stretch turns green.' : 'Confirm that the CC road is restored and cured. The stretch turns green.'} confirmLabel="Approve" needReason={false}
           onClose={() => setConfirm(null)} onConfirm={async (note) => { await post(`/api/stretches/${id}/approve`, { note }); toast(`${p.code} approved.`) }} />
       )}
       {confirm === 'reject' && (

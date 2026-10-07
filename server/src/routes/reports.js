@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
-import { STAGES, ISSUE_KINDS, label, normaliseStatus } from '../../../shared/status.ts';
+import { STAGES, ISSUE_KINDS, label, normaliseStatus, restorationLabel, surfaceOf } from '../../../shared/status.ts';
 import { addStretch, emptyField, progressTable } from '../../../shared/stats.ts';
-import { reference, wardOfGeometry } from '../reference.js';
+import { basePipesById, basePlan, network, reference, wardOfGeometry } from '../reference.js';
 import { listLabour } from './labour.js';
 
 const issueLabel = (k) => ISSUE_KINDS.find((i) => i.key === k)?.label ?? k;
@@ -26,6 +26,16 @@ async function loadAll(db) {
   )).rows;
   const labour = (await listLabour(db)).reverse(); // oldest first
   return { stretches, issues, labour };
+}
+
+/** Inputs of the progress table: wards, the current plan network, and what staff recorded. */
+function planInput(stretches, issues, labour) {
+  return {
+    wards: reference.wards.map((w) => ({ ward: w.properties.ward, zone: w.properties.zone, locality: w.properties.locality ?? null })),
+    pipes: [...network.pipes.values()].map((f) => ({ id: f.properties.id, ward: f.properties.ward ?? null, zone: f.properties.zone, length_m: f.properties.length_m ?? 0 })),
+    manholes: [...network.manholes.values()].map((f) => ({ id: f.properties.id, ward: f.properties.ward ?? null, zone: f.properties.zone })),
+    stretches, issues, labour,
+  };
 }
 
 /** Monday 00:00 UTC of the week containing d. */
@@ -67,14 +77,58 @@ const esc = (s) => String(s ?? '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>'
 export function registerReportRoutes(app, db) {
   const auth = { preHandler: app.authenticate };
 
-  // Progress over time: the history replayed week by week (field figures) + open issues at each week end.
+  // The plan network today: the drawings plus approved changes, how it changed, and what is proposed.
+  async function planSummary() {
+    const edits = (await db.query('select kind, op, feature_id, properties, at from network_edits order by id')).rows;
+    const len = new Map([...network.pipes.values()].map((f) => [f.properties.id, f.properties.length_m ?? 0]));
+    for (const f of basePipesById.values()) if (!len.has(f.properties.id)) len.set(f.properties.id, f.properties.length_m ?? 0);
+    const ch = { added_pipes: 0, added_pipe_m: 0, removed_pipes: 0, removed_pipe_m: 0, added_manholes: 0, removed_manholes: 0, last_change_at: null };
+    for (const e of edits) {
+      const m = e.kind === 'pipe' ? (e.op === 'add' ? e.properties?.length_m ?? 0 : len.get(e.feature_id) ?? 0) : 0;
+      if (e.properties?.length_m != null) len.set(e.feature_id, e.properties.length_m);
+      if (e.kind === 'pipe' && e.op === 'add') { ch.added_pipes++; ch.added_pipe_m += m }
+      if (e.kind === 'pipe' && e.op === 'delete') { ch.removed_pipes++; ch.removed_pipe_m += m }
+      if (e.kind === 'manhole') e.op === 'add' ? ch.added_manholes++ : ch.removed_manholes++;
+      ch.last_change_at = e.at;
+    }
+    const current = {
+      pipe_m: [...network.pipes.values()].reduce((a, f) => a + (f.properties.length_m ?? 0), 0),
+      pipes: network.pipes.size, manholes: network.manholes.size,
+    };
+    const pend = (await db.query("select entity, action, target_id, payload from change_requests where status = 'pending' and entity in ('pipe', 'manhole')")).rows;
+    const pending = {
+      pipe_add: pend.filter((r) => r.entity === 'pipe' && r.action === 'add').length,
+      pipe_add_m: pend.filter((r) => r.entity === 'pipe' && r.action === 'add').reduce((a, r) => a + (r.payload?.properties?.length_m ?? 0), 0),
+      pipe_delete: pend.filter((r) => r.entity === 'pipe' && r.action === 'delete').length,
+      pipe_delete_m: pend.filter((r) => r.entity === 'pipe' && r.action === 'delete').reduce((a, r) => a + (len.get(r.target_id) ?? 0), 0),
+      manhole_add: pend.filter((r) => r.entity === 'manhole' && r.action === 'add').length,
+      manhole_delete: pend.filter((r) => r.entity === 'manhole' && r.action === 'delete').length,
+    };
+    return { base: basePlan, current, changes: ch, pending, edits };
+  }
+
+  app.get('/api/stats/plan', auth, async () => {
+    const { edits, ...rest } = await planSummary();
+    return rest;
+  });
+
+  // Progress over time: the history replayed week by week (field figures), the plan network length at each week
+  // end (it steps up or down on the day a network change is approved), and issues opened / resolved per week.
   app.get('/api/stats/timeline', auth, async () => {
     const versions = (await db.query(
-      `select v.stretch_id, v.version, v.kind, v.at, v.status, v.approval, s.length_m, s.ward, s.zone, s.planned_mh
+      `select v.stretch_id, v.version, v.kind, v.at, v.status, v.approval, s.length_m, s.ward, s.zone, s.planned_mh, s.pipe_ids
        from stretch_versions v join stretches s on s.id = v.stretch_id order by v.at, v.version`,
     )).rows;
     const issues = (await db.query('select reported_at, resolved_at from issues')).rows;
     if (!versions.length) return { weeks: [] };
+    const { edits } = await planSummary();
+    const pipeLen = new Map();
+    for (const f of basePipesById.values()) pipeLen.set(f.properties.id, f.properties.length_m ?? 0);
+    const editDeltas = edits.filter((e) => e.kind === 'pipe').map((e) => {
+      const m = e.op === 'add' ? (e.properties?.length_m ?? 0) : -(pipeLen.get(e.feature_id) ?? 0);
+      if (e.op === 'add') pipeLen.set(e.feature_id, e.properties?.length_m ?? 0);
+      return { at: new Date(e.at), m };
+    });
     const state = new Map();
     const weeks = [];
     let i = 0;
@@ -89,31 +143,65 @@ export function registerReportRoutes(app, db) {
       const f = emptyField();
       for (const s of state.values()) addStretch(f, s);
       const open = issues.filter((x) => new Date(x.reported_at) < weekEnd && (!x.resolved_at || new Date(x.resolved_at) >= weekEnd)).length;
-      weeks.push({ week: w.toISOString().slice(0, 10), ...f, open_issues: open });
+      const opened = issues.filter((x) => new Date(x.reported_at) >= w && new Date(x.reported_at) < weekEnd).length;
+      const resolved = issues.filter((x) => x.resolved_at && new Date(x.resolved_at) >= w && new Date(x.resolved_at) < weekEnd).length;
+      const plan_m = basePlan.pipe_m + editDeltas.filter((d) => d.at < weekEnd).reduce((a, d) => a + d.m, 0);
+      weeks.push({ week: w.toISOString().slice(0, 10), ...f, open_issues: open, issues_opened: opened, issues_resolved: resolved, plan_m });
     }
     return { weeks };
   });
 
-  // Excel workbook: the progress sheet in its usual layout with field-verified columns, plus detail sheets.
+  // The last 7 days in the field: updates, new roads, restorations, issues, labour and who was active.
+  app.get('/api/stats/week', auth, async () => {
+    const since = new Date(Date.now() - 7 * 86400000);
+    const v = (await db.query(
+      `select v.kind, v.changes, v.user_id, v.stretch_id, u.name from stretch_versions v left join users u on u.id = v.user_id where v.at >= $1`, [since],
+    )).rows;
+    const edits = v.filter((x) => ['create', 'update', 'bulk', 'geometry'].includes(x.kind));
+    const restored = new Set(edits.filter((x) => x.changes.some((c) => c.path === 'restoration.stage' && String(c.to).startsWith('restored'))).map((x) => x.stretch_id));
+    const iss = (await db.query(
+      `select count(*) filter (where reported_at >= $1)::int as opened, count(*) filter (where resolved_at >= $1)::int as resolved from issues`, [since],
+    )).rows[0];
+    const lab = (await db.query(
+      `select count(distinct log_date)::int as days, coalesce(sum(labourers), 0)::int as labourers from labour_entries where log_date >= $1::date`,
+      [since.toLocaleDateString('en-CA', { timeZone: TZ })],
+    )).rows[0];
+    const people = new Map();
+    for (const x of edits) if (x.name) people.set(x.name, (people.get(x.name) ?? 0) + 1);
+    return {
+      updates: edits.length,
+      new_stretches: edits.filter((x) => x.kind === 'create').length,
+      stretches_touched: new Set(edits.map((x) => x.stretch_id)).size,
+      restored: restored.size,
+      issues_opened: iss.opened, issues_resolved: iss.resolved,
+      labour_avg: lab.days ? Math.round(lab.labourers / lab.days) : null,
+      active: [...people.entries()].map(([name, n]) => ({ name, updates: n })).sort((a, b) => b.updates - a.updates),
+    };
+  });
+
+  // Excel workbook: a field progress sheet (ward and zone rows, plan network and what staff recorded), plus detail sheets.
   app.get('/api/export/progress.xlsx', auth, async (req, reply) => {
     const { stretches, issues, labour } = await loadAll(db);
-    const table = progressTable(reference.baseline.groups, stretches, issues, labour);
+    const table = progressTable(planInput(stretches, issues, labour));
+    const plan = await planSummary();
     const wb = new ExcelJS.Workbook();
-    wb.creator = 'Madhira UGD Tracker';
+    wb.creator = 'UGD Tracker';
     wb.created = new Date();
 
     const ws = wb.addWorksheet('Progress', { views: [{ state: 'frozen', xSplit: 4, ySplit: 5 }] });
-    ws.addRow([`UGD progress — Madhira Municipality — generated ${today()} by ${req.user.name}`]);
-    ws.addRow(['Sanctioned and "Executed (reported)" are from the progress sheet dated 30-09-2026; "Field-verified" is what AEEs recorded on the map.']);
+    ws.addRow([`UGD field progress — generated ${today()} by ${req.user.name}`]);
+    ws.addRow([`All figures are what staff recorded on the map. Plan network = the drawings (${Math.round(basePlan.pipe_m)} m) plus approved changes `
+      + `(+${Math.round(plan.changes.added_pipe_m)} m, -${Math.round(plan.changes.removed_pipe_m)} m) = ${Math.round(plan.current.pipe_m)} m.`]);
     ws.addRow([]);
     const groups = [
-      ['S.No', 1], ['Zone', 1], ['Ward', 1], ['Area of working', 1], ['Sanctioned', 3], ['Executed (reported, 30-09-26)', 3],
-      ['Field-verified on map', 3], ['Balance to execute (reported)', 3], ['Road condition (field, m)', 4], ['Open issues', 1], ['Avg labour/day (7 d)', 1],
+      ['S.No', 1], ['Zone', 1], ['Ward', 1], ['Area', 1], ['Plan network', 3], ['Recorded by staff', 3],
+      ['Field progress', 4], ['Road (field, m)', 6], ['Open issues', 1], ['Labour/day (7 d, zone)', 1],
     ];
     const h1 = ws.addRow(groups.flatMap(([t, n]) => [t, ...Array(n - 1).fill(null)]));
     const h2 = ws.addRow([null, null, null, null,
-      'Pipeline (Rmt)', 'Manholes', 'ICs', 'Pipeline (Rmt)', 'Manholes', 'ICs', 'Pipe laid (m)', 'Manholes built', 'ICs built',
-      'Pipeline (Rmt)', 'Manholes', 'ICs', 'Road cut', 'CC restored', 'Approved', 'Not motorable', null, null]);
+      'Pipeline (m)', 'Manholes', 'Pipe reaches', 'Recorded (m)', 'Not yet recorded (m)', 'Recorded %',
+      'Pipe laid (m)', '% of plan', 'Manholes built', 'ICs built',
+      'Road cut', 'Back-filled', 'Restored CC', 'Restored gravel', 'Approved', 'Not motorable', null, null]);
     let col = 1;
     for (const [, n] of groups) {
       if (n > 1) ws.mergeCells(4, col, 4, col + n - 1);
@@ -129,16 +217,18 @@ export function registerReportRoutes(app, db) {
       });
     }
     ws.getRow(5).height = 30;
+    const pctOf = (a, b) => (b > 0 ? Math.round((a / b) * 1000) / 10 : null);
     const line = (sno, r, isTotal) => {
       const f = r.field;
+      const p = r.plan;
       const row = ws.addRow([
         sno, isTotal ? null : r.zone, isTotal ? null : r.wards.join(', '), isTotal ? r.label : r.locality ?? r.label,
-        r.sanctioned.pipe_m, r.sanctioned.manholes, r.sanctioned.ics,
-        r.reported.pipe_m, r.reported.manholes, r.reported.ics,
-        Math.round(f.pipe_laid_m), f.manholes_built, f.ics_built,
-        r.sanctioned.pipe_m - r.reported.pipe_m, r.sanctioned.manholes - r.reported.manholes, r.sanctioned.ics - r.reported.ics,
-        Math.round(f.road_cut_m), Math.round(f.restored_m), Math.round(f.approved_m), Math.round(f.not_motorable_m),
-        r.issues_open, r.labour_avg_7d,
+        Math.round(p.pipe_m), p.manholes, p.pipes,
+        Math.round(p.recorded_m), Math.round(p.pipe_m - p.recorded_m), pctOf(p.recorded_m, p.pipe_m),
+        Math.round(f.pipe_laid_m), pctOf(f.pipe_laid_m, p.pipe_m), f.manholes_built, f.ics_built,
+        Math.round(f.road_cut_m), Math.round(f.backfilled_m), Math.round(f.restored_cc_m), Math.round(f.restored_gravel_m),
+        Math.round(f.approved_m), Math.round(f.not_motorable_m),
+        r.issues_open, isTotal ? r.labour_avg_7d : null,
       ]);
       if (isTotal) {
         row.font = { bold: true };
@@ -151,14 +241,15 @@ export function registerReportRoutes(app, db) {
       for (const r of z.rows) line(sno++, r, false);
       line(null, { ...z.zone, label: `Sub total for Zone ${z.zone.zone}` }, true);
     }
-    line(null, { ...table.total, label: 'Total of Zones 1, 2, 3 & 4' }, true);
-    ws.columns.forEach((c, i) => (c.width = i === 3 ? 40 : i < 3 ? 7 : 12));
+    line(null, { ...table.total, label: 'Total of all zones' }, true);
+    ws.columns.forEach((c, i) => (c.width = i === 3 ? 30 : i < 3 ? 7 : 12));
     for (let c = 5; c <= 22; c++) ws.getColumn(c).numFmt = '#,##0';
+    for (const c of [10, 12]) ws.getColumn(c).numFmt = '0.0';
 
     const ss = wb.addWorksheet('Stretches', { views: [{ state: 'frozen', ySplit: 1 }] });
     ss.columns = [
       ['Code', 10], ['Road', 28], ['Zone', 6], ['Ward', 6], ['Length (m)', 10], ['Plan MH', 8], ['Overall stage', 26], ['Pipeline', 22],
-      ['Pipe laid (m)', 10], ['MH built', 8], ['IC built', 8], ['Excavation', 22], ['Cut length (m)', 10], ['CC restoration', 26], ['Approval', 10],
+      ['Pipe laid (m)', 10], ['MH built', 8], ['IC built', 8], ['Excavation', 22], ['Cut length (m)', 10], ['Road type', 10], ['Road restoration', 30], ['Approval', 10],
       ['Motorability', 22], ['Taps broken', 9], ['Taps restored', 9], ['Water leaks', 9], ['Leaks fixed', 9], ['Drain clogged', 9], ['Water stagnation', 9],
       ['Potholes', 8], ['Uneven back-fill', 9], ['Open issues', 8], ['Record', 10], ['Last update', 18], ['By', 18], ['Outside ward boundary', 10],
     ].map(([header, width]) => ({ header, width }));
@@ -168,14 +259,14 @@ export function registerReportRoutes(app, db) {
       ss.addRow([
         s.code, s.name, s.zone, s.ward, Math.round(s.length_m), s.planned_mh, STAGES.find((x) => x.key === s.stage)?.label,
         label('pipeline', st.sewer.pipeline), st.sewer.pipe_laid_m, st.sewer.manholes_built, st.sewer.ics_built,
-        label('excavation', st.excavation.stage), st.excavation.cut_length_m, label('restoration', st.restoration.stage), s.approval,
+        label('excavation', st.excavation.stage), st.excavation.cut_length_m, label('surface', surfaceOf(st)), restorationLabel(st.restoration.stage, surfaceOf(st)), s.approval,
         label('motorable', st.motorable), st.utilities.taps_broken, st.utilities.taps_restored, st.utilities.water_leaks, st.utilities.water_leaks_fixed,
         st.utilities.drain_clogged ? 'Yes' : 'No', st.hazards.water_stagnation ? 'Yes' : 'No', st.hazards.potholes,
         st.hazards.uneven_backfill ? 'Yes' : 'No', s.open_issues, s.record_state, ist(s.updated_at), s.updated_by_name,
         wardOfGeometry(s.geometry).inside ? '' : 'Yes',
       ]);
     }
-    dateCols(ss, 27);
+    dateCols(ss, 28);
 
     addIssuesSheet(wb, issues);
 
@@ -256,7 +347,7 @@ export function registerReportRoutes(app, db) {
       const desc = [
         `Stage: ${STAGES.find((x) => x.key === s.stage)?.label}`, `Length: ${Math.round(s.length_m)} m`,
         `Pipeline: ${label('pipeline', st.sewer.pipeline)}; MH built ${st.sewer.manholes_built}/${s.planned_mh}; IC built ${st.sewer.ics_built}`,
-        `Excavation: ${label('excavation', st.excavation.stage)}`, `CC restoration: ${label('restoration', st.restoration.stage)} (${s.approval})`,
+        `Excavation: ${label('excavation', st.excavation.stage)}`, `Road restoration (${label('surface', surfaceOf(st))}): ${restorationLabel(st.restoration.stage, surfaceOf(st))} (${s.approval})`,
         `Motorability: ${label('motorable', st.motorable)}`, `Open issues: ${s.open_issues}`, `Last update: ${s.updated_by_name ?? ''} ${istText(s.updated_at)}`,
       ].map(esc).join('<br/>');
       return `<Placemark><name>${esc(s.code)}${s.name ? ` · ${esc(s.name)}` : ''}</name><styleUrl>#${s.stage}</styleUrl>

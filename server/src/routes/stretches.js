@@ -51,16 +51,18 @@ const bulkBody = z.object({
 
 const STATUS_PATHS = new Set([
   'sewer.pipeline', 'sewer.pipe_laid_m', 'sewer.manholes_built', 'sewer.ics_built', 'excavation.stage', 'excavation.cut_length_m',
-  'restoration.stage', 'motorable', 'utilities.taps_broken', 'utilities.taps_restored', 'utilities.water_leaks', 'utilities.water_leaks_fixed',
+  'restoration.stage', 'restoration.surface', 'motorable', 'utilities.taps_broken', 'utilities.taps_restored', 'utilities.water_leaks', 'utilities.water_leaks_fixed',
   'utilities.drain_clogged', 'hazards.water_stagnation', 'hazards.potholes', 'hazards.uneven_backfill',
 ]);
 const ENUMS = {
   'sewer.pipeline': ['not_started', 'partial', 'laid'],
   'excavation.stage': ['none', 'road_cut', 'trench_open', 'backfilled'],
   'restoration.stage': ['not_due', 'pending', 'restored_curing_pending', 'restored_curing_done'],
+  'restoration.surface': ['cc', 'gravel'],
   motorable: ['yes', 'difficult', 'no'],
 };
-const LINKED_PATHS = [['utilities.taps_broken', 'utilities.taps_restored'], ['utilities.water_leaks', 'utilities.water_leaks_fixed']];
+const LINKED_PATHS = [['utilities.taps_broken', 'utilities.taps_restored'], ['utilities.water_leaks', 'utilities.water_leaks_fixed'],
+  ['restoration.stage', 'restoration.surface']];
 const BOOLS = new Set(['utilities.drain_clogged', 'hazards.water_stagnation', 'hazards.uneven_backfill']);
 const NULLABLE = new Set(['sewer.pipe_laid_m', 'excavation.cut_length_m']);
 
@@ -213,8 +215,8 @@ async function applyUpdate(q, user, s, input) {
   let approval = nextApproval(s.approval, next);
   // A rejected restoration recorded again with new photo evidence goes back to the Commissioner.
   if (approval === 'rejected' && input.photos.length > 0 && !input.restoring) approval = 'pending';
-  // A redrawn line is not the road that was approved: it needs approving again.
-  if (geomChanged && approval === 'approved') approval = 'pending';
+  // A redrawn line, or a different road type, is not what was approved: it needs approving again.
+  if ((geomChanged || current.restoration.surface !== next.restoration.surface) && approval === 'approved') approval = 'pending';
   const stage = deriveStage(next, approval);
   const version = s.version + 1;
   const g = gpsCheck(input.gps, geom);
@@ -259,7 +261,7 @@ export function registerStretchRoutes(app, db) {
     const r = (await db.query(`${SELECT_STRETCH} where s.id = $1`, [req.params.id])).rows[0];
     if (!r) return reply.code(404).send({ error: 'Stretch not found.' });
     const versions = (await db.query(
-      `select v.version, v.kind, v.at, v.changes, v.note, v.photos, v.gps, v.gps_distance_m, v.flagged_far, v.warnings, v.approval,
+      `select v.version, v.kind, v.at, v.changes, v.note, v.photos, v.gps, v.gps_distance_m, v.flagged_far, v.warnings, v.approval, v.status,
          v.batch_id, u.name as user_name, u.designation as user_designation
        from stretch_versions v left join users u on u.id = v.user_id where v.stretch_id = $1 order by v.version desc`,
       [r.id],
@@ -407,7 +409,7 @@ export function registerStretchRoutes(app, db) {
         if (!s) throw { code: 404, body: { error: 'Stretch not found.' } };
         const status = normaliseStatus(s.status);
         if (status.restoration.stage !== 'restored_curing_done') {
-          throw { code: 400, body: { error: 'Only stretches with CC restored and curing done can be approved or rejected.' } };
+          throw { code: 400, body: { error: 'Only stretches with the road restored (CC curing done, or gravel compacted) can be approved or rejected.' } };
         }
         if (s.approval === to) throw { code: 400, body: { error: `Already ${to}.` } };
         const version = s.version + 1;

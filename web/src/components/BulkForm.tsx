@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { OPTIONS } from '../../../shared/status.ts'
+import { OPTIONS, RESTORATION_GENERIC } from '../../../shared/status.ts'
 import { post } from '../lib/api'
 import { Field, GpsBadge, Seg, Sheet, useGps } from './ui'
 
@@ -14,6 +14,7 @@ export default function BulkForm({ ids, codes, onClose, onSaved }: { ids: string
   const [pipeline, setPipeline] = useState<string>('__keep')
   const [excavation, setExcavation] = useState<string>('__keep')
   const [restoration, setRestoration] = useState<string>('__keep')
+  const [surface, setSurface] = useState<string>('__keep')
   const [motorable, setMotorable] = useState<string>('__keep')
   const [drain, setDrain] = useState<string>('__keep')
   const [stagnation, setStagnation] = useState<string>('__keep')
@@ -26,6 +27,7 @@ export default function BulkForm({ ids, codes, onClose, onSaved }: { ids: string
   const changes: Choice[] = [
     pipeline !== '__keep' && { path: 'sewer.pipeline', to: pipeline },
     excavation !== '__keep' && { path: 'excavation.stage', to: excavation },
+    surface !== '__keep' && { path: 'restoration.surface', to: surface },
     restoration !== '__keep' && { path: 'restoration.stage', to: restoration },
     motorable !== '__keep' && { path: 'motorable', to: motorable },
     drain !== '__keep' && { path: 'utilities.drain_clogged', to: drain === 'yes' },
@@ -78,12 +80,13 @@ export default function BulkForm({ ids, codes, onClose, onSaved }: { ids: string
           <p className="muted">Stretches: {codes.join(', ')}. Only the fields you set are changed; each stretch gets its own history entry.</p>
           <Field label="A · Pipeline"><Seg small value={pipeline} options={withKeep(OPTIONS.pipeline)} onChange={setPipeline} /></Field>
           <Field label="B · Road cutting"><Seg small value={excavation} options={withKeep(OPTIONS.excavation)} onChange={setExcavation} /></Field>
-          <Field label="C · CC restoration"><Seg small value={restoration} options={withKeep(OPTIONS.restoration)} onChange={setRestoration} /></Field>
+          <Field label="C · Road type"><Seg small value={surface} options={withKeep(OPTIONS.surface)} onChange={setSurface} /></Field>
+          <Field label="C · Road restoration"><Seg small value={restoration} options={withKeep(RESTORATION_GENERIC)} onChange={setRestoration} /></Field>
           <Field label="D · Motorability"><Seg small value={motorable} options={withKeep(OPTIONS.motorable)} onChange={setMotorable} /></Field>
           <Field label="E · Drain clogged with gravel"><Seg small value={drain} options={yesNo} onChange={setDrain} /></Field>
           <Field label="F · Water stagnation"><Seg small value={stagnation} options={yesNo} onChange={setStagnation} /></Field>
           <Field label="Note (optional)"><textarea rows={2} value={note} onChange={(e) => setNote(e.target.value)} /></Field>
-          {needsPhotoNote && <div className="form-warn">Marking the CC road restored needs a photo of each road, so record restoration one stretch at a time. In a bulk update it will be refused.</div>}
+          {needsPhotoNote && <div className="form-warn">Marking a road restored needs a photo of each road, so record restoration one stretch at a time. In a bulk update it will be refused.</div>}
           {error && <div className="form-error">{error}</div>}
         </>
       )}

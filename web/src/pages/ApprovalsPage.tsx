@@ -1,3 +1,4 @@
+import { surfaceOf } from '../../../shared/status.ts'
 import { useState } from 'react'
 import { requestTitle } from '../components/NetworkForms'
 import { Confirm, fmtDateTime, timeAgo } from '../components/ui'
@@ -27,20 +28,20 @@ export default function ApprovalsPage({ onShow, toast }: { onShow: (s: Selection
         <h2>{isAdmin ? 'Approvals' : 'My requests'}</h2>
         <p className="muted">
           {isAdmin
-            ? 'CC road restorations turn green only after you approve them. Additions and deletions of stretches, pipes and manholes by AEEs wait here too.'
+            ? 'Road restorations (CC cured, or gravel compacted) turn green only after you approve them. Additions and deletions of stretches, pipes and manholes by AEEs wait here too.'
             : 'Additions and deletions you proposed, and the Commissioner’s decisions.'}
         </p>
       </div>
 
       {isAdmin && (
         <section className="card-section">
-          <h3>CC restoration awaiting approval <span className="count">{restorations.length}</span></h3>
+          <h3>Road restoration awaiting approval <span className="count">{restorations.length}</span></h3>
           {!restorations.length && <div className="muted">Nothing waiting.</div>}
           <div className="cards">
             {restorations.map((f) => (
               <div key={f.id} className="card">
                 <div className="card-top"><b>{f.properties.code}</b><span className="muted">{timeAgo(f.properties.updated_at)}</span></div>
-                <div>{f.properties.name ?? 'Unnamed road'} · ward {f.properties.ward} · {Math.round(f.properties.length_m)} m</div>
+                <div>{f.properties.name ?? 'Unnamed road'} · ward {f.properties.ward} · {Math.round(f.properties.length_m)} m · {surfaceOf(f.properties.status) === 'gravel' ? 'gravel road, compacted' : 'CC road, cured'}</div>
                 <div className="muted small">Recorded by {f.properties.updated_by_name ?? '—'}{f.properties.flagged_far ? ' · ⚠ recorded away from site' : ''}</div>
                 <div className="btn-row">
                   <button className="btn small" onClick={() => onShow({ kind: 'stretch', id: f.id })}>Show on map</button>
